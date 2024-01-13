@@ -42,15 +42,18 @@
 /* Private variables ---------------------------------------------------------*/
 TIM_HandleTypeDef htim1;
 TIM_HandleTypeDef htim2;
+TIM_HandleTypeDef htim3;
 
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
 uint32_t StepChange;
 uint32_t FrequencyChangeTime;
-uint32_t BrakeTime;
-int BrakeActive=0;
 int State=1;
+int32_t EncoderValue;
+int32_t EncoderMeasureTime;
+int32_t PreviousEncoderValue;
+int32_t Speed;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -59,8 +62,13 @@ static void MX_GPIO_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_TIM1_Init(void);
 static void MX_TIM2_Init(void);
+static void MX_TIM3_Init(void);
 /* USER CODE BEGIN PFP */
-
+void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim){
+	if (htim == &htim3){
+		EncoderValue = __HAL_TIM_GET_COUNTER(htim);
+	}
+}
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -99,61 +107,45 @@ int main(void)
   MX_USART2_UART_Init();
   MX_TIM1_Init();
   MX_TIM2_Init();
+  MX_TIM3_Init();
+  /* USER CODE BEGIN 2 */
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_2);
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_3);
   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_2);
   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_3);
-  /* USER CODE BEGIN 2 */
-
+  HAL_TIM_Encoder_Start_IT(&htim3,TIM_CHANNEL_ALL);
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-
-
-
   uint32_t 	pwm[7];
   uint32_t 	speed=1000;
-  uint32_t 	Frequency=100;
-  uint32_t 	RequestedFrequency=120;
-  BrakeTime=HAL_GetTick();
+  uint32_t 	Frequency=1;
+  uint32_t 	RequestedFrequency=1;
   State=1;
+
   while (1)
   {
+	  if ((HAL_GetTick()-EncoderMeasureTime)>=10 ){
+	  		  Speed=(EncoderValue-PreviousEncoderValue)*60*100/1024/4;
+	  		  PreviousEncoderValue=EncoderValue;
+	  		  EncoderMeasureTime= HAL_GetTick();
+	  }
 
-	  //if (BrakeActive !=1){
-//		  if ((RequestedFrequency > Frequency) && ((HAL_GetTick()-FrequencyChangeTime)>=50 )){
-//			  Frequency++;
-//			  FrequencyChangeTime= HAL_GetTick();
-//		  }
+	  if ((RequestedFrequency > Frequency) && ((HAL_GetTick()-FrequencyChangeTime)>=50 )){
+		  Frequency++;
+		  FrequencyChangeTime= HAL_GetTick();
+	  }
 
-		  if (Frequency != 0){
-			  if ((HAL_GetTick() - StepChange ) >= (1000/Frequency)){
-				  if(State<6){ State++; }
-				  else { State=1; }
-				  StepChange= HAL_GetTick();
-			  }
+	  if (Frequency != 0){
+		  if ((HAL_GetTick() - StepChange ) >= (1000/Frequency)){
+			  if(State<6){ State++; }
+			  else { State=1; }
+			  StepChange= HAL_GetTick();
 		  }
-
-	  //}
-
-//	  if ((HAL_GetTick()-BrakeTime)>=10000 ){
-//	  		  if( State !=0 ){
-//	  			  BrakeActive=1;
-//	  			  State=0;
-//	  			  pwm[1]=pwm[3]=speed;
-//	  			  pwm[2]=pwm[4]=pwm[5]=pwm[6]=0;
-//	  		  }
-//	  		  else {
-//	  			  BrakeActive=0;
-//	  			  State=1;
-//	  			  Frequency=40;
-//	  			  pwm[1]=pwm[2]=pwm[3]=pwm[4]=pwm[5]=pwm[6]=0;
-//	  		  }
-//	  		  BrakeTime=HAL_GetTick();
-//	  }
+	  }
 
 	  switch (State){
 	  case 1:
@@ -262,7 +254,7 @@ static void MX_TIM1_Init(void)
 
   /* USER CODE END TIM1_Init 1 */
   htim1.Instance = TIM1;
-  htim1.Init.Prescaler = 5-1;
+  htim1.Init.Prescaler = 10-1;
   htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
   htim1.Init.Period = 1000;
   htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
@@ -344,7 +336,7 @@ static void MX_TIM2_Init(void)
 
   /* USER CODE END TIM2_Init 1 */
   htim2.Instance = TIM2;
-  htim2.Init.Prescaler = 5-1;
+  htim2.Init.Prescaler = 10-1;
   htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
   htim2.Init.Period = 1000;
   htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
@@ -388,6 +380,55 @@ static void MX_TIM2_Init(void)
 
   /* USER CODE END TIM2_Init 2 */
   HAL_TIM_MspPostInit(&htim2);
+
+}
+
+/**
+  * @brief TIM3 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM3_Init(void)
+{
+
+  /* USER CODE BEGIN TIM3_Init 0 */
+
+  /* USER CODE END TIM3_Init 0 */
+
+  TIM_Encoder_InitTypeDef sConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM3_Init 1 */
+
+  /* USER CODE END TIM3_Init 1 */
+  htim3.Instance = TIM3;
+  htim3.Init.Prescaler = 0;
+  htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim3.Init.Period = 65535;
+  htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  sConfig.EncoderMode = TIM_ENCODERMODE_TI12;
+  sConfig.IC1Polarity = TIM_ICPOLARITY_RISING;
+  sConfig.IC1Selection = TIM_ICSELECTION_DIRECTTI;
+  sConfig.IC1Prescaler = TIM_ICPSC_DIV1;
+  sConfig.IC1Filter = 0;
+  sConfig.IC2Polarity = TIM_ICPOLARITY_RISING;
+  sConfig.IC2Selection = TIM_ICSELECTION_DIRECTTI;
+  sConfig.IC2Prescaler = TIM_ICPSC_DIV1;
+  sConfig.IC2Filter = 0;
+  if (HAL_TIM_Encoder_Init(&htim3, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim3, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM3_Init 2 */
+
+  /* USER CODE END TIM3_Init 2 */
 
 }
 
