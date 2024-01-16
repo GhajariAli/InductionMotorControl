@@ -638,14 +638,15 @@ void ssd1306_I2C_Init() {
 	//	p--;
 	//MX_I2C1_Init();
 }
-
+extern int I2C1_Free;
 void ssd1306_I2C_WriteMulti(uint8_t address, uint8_t reg, uint8_t* data, uint16_t count) {
-uint8_t dt[256];
-dt[0] = reg;
-uint8_t i;
-for(i = 0; i < count; i++)
-dt[i+1] = data[i];
-HAL_I2C_Master_Transmit(&hi2c1, address, dt, count+1, 10);
+	uint8_t dt[256];
+	dt[0] = reg;
+	uint8_t i;
+	for(i = 0; i < count; i++)
+	dt[i+1] = data[i];
+	//HAL_I2C_Master_Transmit_DMA(&hi2c1, address, dt, count+1);
+	HAL_I2C_Master_Transmit(&hi2c1, address, dt, count+1, 10);
 }
 
 
@@ -653,7 +654,8 @@ void ssd1306_I2C_Write(uint8_t address, uint8_t reg, uint8_t data) {
 	uint8_t dt[2];
 	dt[0] = reg;
 	dt[1] = data;
-	HAL_I2C_Master_Transmit(&hi2c1, address, dt, 2, 10);
+	//HAL_I2C_Master_Transmit_DMA(&hi2c1, address, dt, sizeof(dt));
+	HAL_I2C_Master_Transmit(&hi2c1, address, dt, 2, 2);
 }
 
 

@@ -21,6 +21,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include <stdio.h>
 #include "fonts.h"
 #include "ssd1306.h"
 /* USER CODE END Includes */
@@ -42,6 +43,7 @@
 
 /* Private variables ---------------------------------------------------------*/
 I2C_HandleTypeDef hi2c1;
+DMA_HandleTypeDef hdma_i2c1_tx;
 
 TIM_HandleTypeDef htim1;
 TIM_HandleTypeDef htim2;
@@ -57,12 +59,13 @@ int State=1;
 int32_t EncoderValue=0;
 int32_t EncoderMeasureTime=0;
 int32_t PreviousEncoderValue=0;
-int32_t Speed=0;
+double ActualSpeed=0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
+static void MX_DMA_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_TIM1_Init(void);
 static void MX_TIM2_Init(void);
@@ -74,6 +77,7 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim){
 		EncoderValue = __HAL_TIM_GET_COUNTER(htim);
 	}
 }
+
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -109,6 +113,7 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_DMA_Init();
   MX_USART2_UART_Init();
   MX_TIM1_Init();
   MX_TIM2_Init();
@@ -128,7 +133,7 @@ int main(void)
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   uint32_t 	pwm[7];
-  uint32_t 	speed=1000;
+  uint32_t 	Voltage=1000;
   uint32_t 	Frequency=1;
   uint32_t 	RequestedFrequency=120;
   State=1;
@@ -149,7 +154,7 @@ int main(void)
 	  //1024*4 pulse / revolution on encoder
 	  //Pully ratio 20:50
 	  if ((HAL_GetTick()-EncoderMeasureTime)>=10 ){
-	  		  Speed=(EncoderValue-PreviousEncoderValue)*60*100/1024/4;
+	  		  ActualSpeed=(EncoderValue-PreviousEncoderValue)*((60*100)*20)/(1024*4*50);
 	  		  PreviousEncoderValue=EncoderValue;
 	  		  EncoderMeasureTime= HAL_GetTick();
 	  }
@@ -169,27 +174,27 @@ int main(void)
 
 	  switch (State){
 	  case 1:
-		  pwm[1]=pwm[4]=speed;
+		  pwm[1]=pwm[4]=Voltage;
 		  pwm[2]=pwm[3]=pwm[5]=pwm[6]=0;
 		  break;
 	  case 2:
-		  pwm[1]=pwm[6]=speed;
+		  pwm[1]=pwm[6]=Voltage;
 		  pwm[2]=pwm[3]=pwm[4]=pwm[5]=0;
 		  break;
 	  case 3:
-		  pwm[3]=pwm[6]=speed;
+		  pwm[3]=pwm[6]=Voltage;
 		  pwm[1]=pwm[2]=pwm[4]=pwm[5]=0;
 		  break;
 	  case 4:
-		  pwm[2]=pwm[3]=speed;
+		  pwm[2]=pwm[3]=Voltage;
 		  pwm[1]=pwm[4]=pwm[5]=pwm[6]=0;
 		  break;
 	  case 5:
-		  pwm[2]=pwm[5]=speed;
+		  pwm[2]=pwm[5]=Voltage;
 		  pwm[1]=pwm[3]=pwm[4]=pwm[6]=0;
 		  break;
 	  case 6:
-		  pwm[4]=pwm[5]=speed;
+		  pwm[4]=pwm[5]=Voltage;
 		  pwm[1]=pwm[2]=pwm[3]=pwm[6]=0;
 		  break;
 	  }
@@ -202,19 +207,19 @@ int main(void)
 
 	  //Update Screen
 	  char Message[25];
-	  if ((HAL_GetTick() - ScreenUpdateTime ) >= 50){
+	  if ((HAL_GetTick() - ScreenUpdateTime ) >= 20){
 		  SSD1306_GotoXY(0, 25);
 		  memset(Message,32,sizeof(Message));
 		  SSD1306_Puts(Message, &Font_7x10, 1);
 		  SSD1306_GotoXY(0, 25);
-		  sprintf(&Message,"%ld Hz",Frequency);
+		  sprintf(Message,"%ld Hz",Frequency);
 		  SSD1306_Puts(Message, &Font_7x10, 1);
 
 		  SSD1306_GotoXY(64, 25);
 		  memset(Message,32,sizeof(Message));
 		  SSD1306_Puts(Message, &Font_7x10, 1);
 		  SSD1306_GotoXY(64, 25);
-		  sprintf(&Message,"%ld Rpm",Speed);
+		  sprintf(Message,"%.0lf Rpm",ActualSpeed);
 		  SSD1306_Puts(Message, &Font_7x10, 1);
 
 		  SSD1306_UpdateScreen();
@@ -537,6 +542,22 @@ static void MX_USART2_UART_Init(void)
   /* USER CODE BEGIN USART2_Init 2 */
 
   /* USER CODE END USART2_Init 2 */
+
+}
+
+/**
+  * Enable DMA controller clock
+  */
+static void MX_DMA_Init(void)
+{
+
+  /* DMA controller clock enable */
+  __HAL_RCC_DMA1_CLK_ENABLE();
+
+  /* DMA interrupt init */
+  /* DMA1_Stream1_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Stream1_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Stream1_IRQn);
 
 }
 

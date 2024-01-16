@@ -25,6 +25,6 @@
 ../Core/Src/ssd1306.c:614:6:SSD1306_OFF	1
 ../Core/Src/ssd1306.c:630:6:ssd1306_I2C_Init	2
 ../Core/Src/ssd1306.c:642:6:ssd1306_I2C_WriteMulti	2
-../Core/Src/ssd1306.c:652:6:ssd1306_I2C_Write	1
-../Core/Src/ssd1306.c:660:10:SSD1306_GetCurserX	1
-../Core/Src/ssd1306.c:663:10:SSD1306_GetCurserY	1
+../Core/Src/ssd1306.c:653:6:ssd1306_I2C_Write	1
+../Core/Src/ssd1306.c:662:10:SSD1306_GetCurserX	1
+../Core/Src/ssd1306.c:665:10:SSD1306_GetCurserY	1
