@@ -21,7 +21,8 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "fonts.h"
+#include "ssd1306.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -40,6 +41,8 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
+I2C_HandleTypeDef hi2c1;
+
 TIM_HandleTypeDef htim1;
 TIM_HandleTypeDef htim2;
 TIM_HandleTypeDef htim3;
@@ -47,13 +50,14 @@ TIM_HandleTypeDef htim3;
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
-uint32_t StepChange;
-uint32_t FrequencyChangeTime;
+uint32_t StepChangeTime=0;
+uint32_t FrequencyChangeTime=0;
+uint32_t ScreenUpdateTime=0;
 int State=1;
-int32_t EncoderValue;
-int32_t EncoderMeasureTime;
-int32_t PreviousEncoderValue;
-int32_t Speed;
+int32_t EncoderValue=0;
+int32_t EncoderMeasureTime=0;
+int32_t PreviousEncoderValue=0;
+int32_t Speed=0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -63,6 +67,7 @@ static void MX_USART2_UART_Init(void);
 static void MX_TIM1_Init(void);
 static void MX_TIM2_Init(void);
 static void MX_TIM3_Init(void);
+static void MX_I2C1_Init(void);
 /* USER CODE BEGIN PFP */
 void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim){
 	if (htim == &htim3){
@@ -108,6 +113,7 @@ int main(void)
   MX_TIM1_Init();
   MX_TIM2_Init();
   MX_TIM3_Init();
+  MX_I2C1_Init();
   /* USER CODE BEGIN 2 */
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_2);
@@ -116,6 +122,7 @@ int main(void)
   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_2);
   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_3);
   HAL_TIM_Encoder_Start_IT(&htim3,TIM_CHANNEL_ALL);
+  SSD1306_Init();
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -123,27 +130,40 @@ int main(void)
   uint32_t 	pwm[7];
   uint32_t 	speed=1000;
   uint32_t 	Frequency=1;
-  uint32_t 	RequestedFrequency=1;
+  uint32_t 	RequestedFrequency=120;
   State=1;
 
+  SSD1306_Clear();
+  HAL_Delay(100);
+  SSD1306_GotoXY (12,2);
+  SSD1306_Puts ("Induction Motor", &Font_7x10, 1);
+  SSD1306_GotoXY (30, 12);
+  SSD1306_Puts ("Drive V1.0 ", &Font_7x10, 1);
+  SSD1306_DrawLine(0, 22, 128, 22, 1);
+  SSD1306_UpdateScreen();
+  HAL_Delay(100);
   while (1)
   {
+	  //Calculate RPM
+	  //read every 10ms so *100*60 to be per minute
+	  //1024*4 pulse / revolution on encoder
+	  //Pully ratio 20:50
 	  if ((HAL_GetTick()-EncoderMeasureTime)>=10 ){
 	  		  Speed=(EncoderValue-PreviousEncoderValue)*60*100/1024/4;
 	  		  PreviousEncoderValue=EncoderValue;
 	  		  EncoderMeasureTime= HAL_GetTick();
 	  }
-
-	  if ((RequestedFrequency > Frequency) && ((HAL_GetTick()-FrequencyChangeTime)>=50 )){
+	  //Ramp Frequency
+	  if ((RequestedFrequency > Frequency) && ((HAL_GetTick()-FrequencyChangeTime)>=100 )){
 		  Frequency++;
 		  FrequencyChangeTime= HAL_GetTick();
 	  }
-
+	  //Change State
 	  if (Frequency != 0){
-		  if ((HAL_GetTick() - StepChange ) >= (1000/Frequency)){
+		  if ((HAL_GetTick() - StepChangeTime ) >= (1000/Frequency)){
 			  if(State<6){ State++; }
 			  else { State=1; }
-			  StepChange= HAL_GetTick();
+			  StepChangeTime= HAL_GetTick();
 		  }
 	  }
 
@@ -179,6 +199,27 @@ int main(void)
 	  __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1,pwm[2]);
 	  __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2,pwm[4]);
 	  __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_3,pwm[6]);
+
+	  //Update Screen
+	  char Message[25];
+	  if ((HAL_GetTick() - ScreenUpdateTime ) >= 50){
+		  SSD1306_GotoXY(0, 25);
+		  memset(Message,32,sizeof(Message));
+		  SSD1306_Puts(Message, &Font_7x10, 1);
+		  SSD1306_GotoXY(0, 25);
+		  sprintf(&Message,"%ld Hz",Frequency);
+		  SSD1306_Puts(Message, &Font_7x10, 1);
+
+		  SSD1306_GotoXY(64, 25);
+		  memset(Message,32,sizeof(Message));
+		  SSD1306_Puts(Message, &Font_7x10, 1);
+		  SSD1306_GotoXY(64, 25);
+		  sprintf(&Message,"%ld Rpm",Speed);
+		  SSD1306_Puts(Message, &Font_7x10, 1);
+
+		  SSD1306_UpdateScreen();
+		  ScreenUpdateTime= HAL_GetTick();
+	  }
 
     /* USER CODE END WHILE */
 
@@ -231,6 +272,40 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
+}
+
+/**
+  * @brief I2C1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_I2C1_Init(void)
+{
+
+  /* USER CODE BEGIN I2C1_Init 0 */
+
+  /* USER CODE END I2C1_Init 0 */
+
+  /* USER CODE BEGIN I2C1_Init 1 */
+
+  /* USER CODE END I2C1_Init 1 */
+  hi2c1.Instance = I2C1;
+  hi2c1.Init.ClockSpeed = 400000;
+  hi2c1.Init.DutyCycle = I2C_DUTYCYCLE_2;
+  hi2c1.Init.OwnAddress1 = 0;
+  hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
+  hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
+  hi2c1.Init.OwnAddress2 = 0;
+  hi2c1.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
+  hi2c1.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
+  if (HAL_I2C_Init(&hi2c1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN I2C1_Init 2 */
+
+  /* USER CODE END I2C1_Init 2 */
+
 }
 
 /**
