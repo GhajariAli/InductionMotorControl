@@ -1,3 +1,4 @@
+"./Core/Src/Sbus.o"
 "./Core/Src/fonts.o"
 "./Core/Src/main.o"
 "./Core/Src/ssd1306.o"
