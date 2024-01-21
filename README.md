@@ -4,6 +4,7 @@ Controlling 3 Phase AC Asynchronous Induction Motor
 <details>
   
 <summary> Motor Nameplate </summary>
+
 ![image](https://github.com/GhajariAli/InductionMotorControl/assets/124516346/79e54aa8-2c5a-48e7-a765-f435c64f1b8a)
 
 </details>
