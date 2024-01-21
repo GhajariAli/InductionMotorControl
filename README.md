@@ -3,6 +3,13 @@ Controlling 3 Phase AC Asynchronous Induction Motor
 
 <details>
   
+<summary> Motor Nameplate </summary>
+![image](https://github.com/GhajariAli/InductionMotorControl/assets/124516346/79e54aa8-2c5a-48e7-a765-f435c64f1b8a)
+
+</details>
+
+<details>
+  
 <summary> Designing the circuit </summary>
 
 I've Designed the control boad around this IC fro Infineon [IGCM04F60GAXKMA1](https://www.digikey.ca/en/products/detail/infineon-technologies/IGCM04F60GAXKMA1/5960098)
