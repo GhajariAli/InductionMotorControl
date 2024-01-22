@@ -34,7 +34,7 @@ So I designed a PCB to get things going Faster, you can find the KiCAD design an
 <summary> Adding Encoder </summary>
 Induction Motors are usally not controlled by a closed loop using encoder but to validate and verify my own work I'd like to have and encoder on the shaft.
 
-here is the encoder I've used : 
+[here](https://www.aliexpress.com/item/4000094589182.html?spm=a2g0o.order_list.order_list_main.56.1fdd1802ZbFUS8) is the encoder I've used : 
 
 [![image](https://github.com/GhajariAli/InductionMotorControl/assets/124516346/795896b8-fc90-404c-ae55-26a9536d124e)](https://www.aliexpress.com/item/4000094589182.html?spm=a2g0o.order_list.order_list_main.51.55f218029jO34n)
 
