@@ -19,7 +19,7 @@ Here is the video of testing the circuit and getting initial result:
 
  [ ![image](https://github.com/GhajariAli/InductionMotorControl/assets/124516346/e5c6398d-9890-4f7f-9bff-9ceaebefc4f3)](https://www.youtube.com/shorts/fg0to3o2meA)
 
-So I designed a PCB to get things going Faster, you can find the KiCAD design and initial code to run the motor in [THIS](https://github.com/GhajariAli/InductionMotorControl/tree/FirstCurcuitDesign)https://github.com/GhajariAli/InductionMotorControl/tree/FirstCurcuitDesign branch
+So I designed a PCB to get things going Faster, you can find the KiCAD design and initial code to run the motor in [THIS](https://github.com/GhajariAli/InductionMotorControl/tree/FirstCurcuitDesign) branch
 
 ![image](https://github.com/GhajariAli/InductionMotorControl/assets/124516346/7d180d9a-082e-4a4d-8e66-88960f138076)
 
