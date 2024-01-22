@@ -22,6 +22,8 @@ typedef enum {
 
 }E_Colors;
 
+
 int ReverseByte (uint8_t Number_int);
 void ColorCodeGenerator(ST_RGBValues RGB, uint32_t ColorCode[24]);
 ST_RGBValues RGBandIntensityGenerator(E_Colors color,uint8_t intensity);
+void LEDPutC (E_Colors color,uint8_t intensity,char character,uint32_t CharOnLED[360]);

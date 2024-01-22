@@ -105,13 +105,7 @@ int main(void)
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
 
-  for (int i=360-24;i>=0;i-=24){
-	  ColorCodeGenerator(RGBandIntensityGenerator(Orange, 10),PData);
-	  for (int j=23;j>=0;j--){
-		  OneCharOnLED[i+j]=PData[j];
-	  }
-
-  }
+  LEDPutC(Blue, 1, 'Z', OneCharOnLED);
   HAL_TIM_PWM_Start_DMA(&htim4, TIM_CHANNEL_1,OneCharOnLED, 360);
 
   while (1)

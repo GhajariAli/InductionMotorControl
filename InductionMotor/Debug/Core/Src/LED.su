@@ -1,3 +1,4 @@
 ../Core/Src/LED.c:3:5:ReverseByte	32	static
 ../Core/Src/LED.c:14:14:RGBandIntensityGenerator	32	static
 ../Core/Src/LED.c:62:6:ColorCodeGenerator	40	static
+../Core/Src/LED.c:76:6:LEDPutC	248	static
