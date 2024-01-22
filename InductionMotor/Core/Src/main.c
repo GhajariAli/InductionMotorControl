@@ -46,7 +46,7 @@ DMA_HandleTypeDef hdma_tim4_ch1;
 
 /* USER CODE BEGIN PV */
 uint32_t PData[24];
-uint32_t ThreeLED[72];
+uint32_t OneCharOnLED[360];
 int DMAFree=1;
 
 /* USER CODE END PV */
@@ -105,31 +105,17 @@ int main(void)
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
 
-
-  for (int i=48;i>=0;i-=24){
-	  int R,G,B;
-	  if (i==48) {R=1;G=1;B=0;}
-	  if (i==24) {R=2;G=1;B=0;}
-	  if (i==0)  {R=3;G=1;B=0;}
-	  ColorCodeGenerator(R,G,B,PData);
+  for (int i=360-24;i>=0;i-=24){
+	  ColorCodeGenerator(RGBandIntensityGenerator(Orange, 10),PData);
 	  for (int j=23;j>=0;j--){
-		  ThreeLED[i+j]=PData[j];
+		  OneCharOnLED[i+j]=PData[j];
 	  }
 
   }
-  HAL_TIM_PWM_Start_DMA(&htim4, TIM_CHANNEL_1,ThreeLED, 72);
+  HAL_TIM_PWM_Start_DMA(&htim4, TIM_CHANNEL_1,OneCharOnLED, 360);
 
   while (1)
   {
-//	for (int R=0;R<=255;R++){
-//	  if (DMAFree){
-//	  		  ColorCodeGenerator(R,0,0,PData);
-//	  		  HAL_TIM_PWM_Start_DMA(&htim4, TIM_CHANNEL_1,(uint16_t*)PData, 24);
-//	  		  DMAFree=0;
-//	  	  }
-//	  HAL_Delay(200);
-//  	  }
-
 
     /* USER CODE END WHILE */
 

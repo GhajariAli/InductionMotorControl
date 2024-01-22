@@ -1,2 +1,3 @@
 ../Core/Src/LED.c:3:5:ReverseByte	3
-../Core/Src/LED.c:15:6:ColorCodeGenerator	3
+../Core/Src/LED.c:14:14:RGBandIntensityGenerator	10
+../Core/Src/LED.c:62:6:ColorCodeGenerator	3
