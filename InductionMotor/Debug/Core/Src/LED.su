@@ -1,0 +1,2 @@
+../Core/Src/LED.c:3:5:ReverseByte	32	static
+../Core/Src/LED.c:15:6:ColorCodeGenerator	40	static
