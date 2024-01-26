@@ -45,7 +45,7 @@ TIM_HandleTypeDef htim4;
 DMA_HandleTypeDef hdma_tim4_ch1;
 
 /* USER CODE BEGIN PV */
-uint32_t PData[24];
+uint32_t EmptyData[24]={0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 uint32_t OneCharOnLED[360];
 int DMAFree=1;
 
@@ -105,12 +105,26 @@ int main(void)
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
 
-  LEDPutC(Blue, 1, 'Z', OneCharOnLED);
-  HAL_TIM_PWM_Start_DMA(&htim4, TIM_CHANNEL_1,OneCharOnLED, 360);
-
   while (1)
   {
 
+	  LEDPutC(Yellow, 1, 'A' , OneCharOnLED);
+	  HAL_TIM_PWM_Start_DMA(&htim4, TIM_CHANNEL_1,OneCharOnLED, 360);
+	  HAL_Delay(1000);
+	  HAL_TIM_PWM_Start_DMA(&htim4, TIM_CHANNEL_1,EmptyData, 24);
+	  HAL_Delay(2);
+
+	  LEDPutC(Yellow, 1, 'L' , OneCharOnLED);
+	  HAL_TIM_PWM_Start_DMA(&htim4, TIM_CHANNEL_1,OneCharOnLED, 360);
+	  HAL_Delay(1000);
+	  HAL_TIM_PWM_Start_DMA(&htim4, TIM_CHANNEL_1,EmptyData, 24);
+	  HAL_Delay(2);
+
+	  LEDPutC(Yellow, 1, 'I' , OneCharOnLED);
+	  HAL_TIM_PWM_Start_DMA(&htim4, TIM_CHANNEL_1,OneCharOnLED, 360);
+	  HAL_Delay(1000);
+	  HAL_TIM_PWM_Start_DMA(&htim4, TIM_CHANNEL_1,EmptyData, 24);
+	  HAL_Delay(1000);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
