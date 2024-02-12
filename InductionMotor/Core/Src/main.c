@@ -22,8 +22,6 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <stdio.h>
-#include "fonts.h"
-#include "ssd1306.h"
 #include "Sbus.h"
 /* USER CODE END Includes */
 
@@ -43,8 +41,6 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
-I2C_HandleTypeDef hi2c3;
-
 TIM_HandleTypeDef htim2;
 TIM_HandleTypeDef htim3;
 TIM_HandleTypeDef htim4;
@@ -63,6 +59,8 @@ int32_t EncoderValue=0;
 int32_t EncoderMeasureTime=0;
 int32_t PreviousEncoderValue=0;
 double ActualSpeed=0;
+int Enable=0;
+int ToggleEnable=0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -73,7 +71,6 @@ static void MX_USART2_UART_Init(void);
 static void MX_TIM2_Init(void);
 static void MX_TIM3_Init(void);
 static void MX_USART6_UART_Init(void);
-static void MX_I2C3_Init(void);
 static void MX_TIM4_Init(void);
 /* USER CODE BEGIN PFP */
 void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim){
@@ -126,110 +123,121 @@ int main(void)
   MX_TIM2_Init();
   MX_TIM3_Init();
   MX_USART6_UART_Init();
-  MX_I2C3_Init();
   MX_TIM4_Init();
   /* USER CODE BEGIN 2 */
   HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_1);
   HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_2);
   HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_3);
   HAL_TIM_Encoder_Start_IT(&htim3,TIM_CHANNEL_ALL);
-  SSD1306_Init();
+
   HAL_UART_Receive_DMA(&huart6, &receivedSBUS.ReceivedData[0], SBUS_LEN);
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  uint32_t 	pwm[7];
-  uint32_t 	Voltage=1000;
-  uint32_t 	Frequency=1;
-  uint32_t 	RequestedFrequency=120;
+  uint32_t 	Voltage=700;
+  uint32_t 	Frequency=10;
+  uint32_t 	RequestedFrequency=30;
   State=1;
 
-  SSD1306_Clear();
-  HAL_Delay(100);
-  SSD1306_GotoXY (12,2);
-  SSD1306_Puts ("Induction Motor", &Font_7x10, 1);
-  SSD1306_GotoXY (30, 12);
-  SSD1306_Puts ("Drive V1.0 ", &Font_7x10, 1);
-  SSD1306_DrawLine(0, 22, 128, 22, 1);
-  SSD1306_UpdateScreen();
-  HAL_Delay(100);
   while (1)
   {
-	  //Calculate RPM
-	  //read every 10ms so *100*60 to be per minute
-	  //1024*4 pulse / revolution on encoder
-	  //Pully ratio 20:50
-	  if ((HAL_GetTick()-EncoderMeasureTime)>=10 ){
-	  		  ActualSpeed=(EncoderValue-PreviousEncoderValue)*((60*100)*20)/(1024*4*50);
-	  		  PreviousEncoderValue=EncoderValue;
-	  		  EncoderMeasureTime= HAL_GetTick();
+	  if(HAL_GPIO_ReadPin(B1_GPIO_Port, B1_Pin)) ToggleEnable=1;
+	  while (!HAL_GPIO_ReadPin(B1_GPIO_Port, B1_Pin) && ToggleEnable){
+		  if (Enable) Enable=0;
+		  else Enable=1;
+		  ToggleEnable=0;
 	  }
-	  //Ramp Frequency
-	  if ((RequestedFrequency > Frequency) && ((HAL_GetTick()-FrequencyChangeTime)>=100 )){
-		  Frequency++;
-		  FrequencyChangeTime= HAL_GetTick();
-	  }
-	  //Change State
-	  if (Frequency != 0){
-		  if ((HAL_GetTick() - StepChangeTime ) >= (1000/Frequency)){
-			  if(State<6){ State++; }
-			  else { State=1; }
-			  StepChangeTime= HAL_GetTick();
+	  if(Enable){
+		  //Calculate RPM
+		  //read every 10ms so *100*60 to be per minute
+		  //1024*4 pulse / revolution on encoder
+		  //Pully ratio 20:50
+		  if ((HAL_GetTick()-EncoderMeasureTime)>=10 ){
+				  ActualSpeed=(EncoderValue-PreviousEncoderValue)*((60*100)*20)/(1024*4*50);
+				  PreviousEncoderValue=EncoderValue;
+				  EncoderMeasureTime= HAL_GetTick();
+		  }
+		  //Ramp Frequency
+		  if ((RequestedFrequency > Frequency) && ((HAL_GetTick()-FrequencyChangeTime)>=100 )){
+			  Frequency++;
+			  FrequencyChangeTime= HAL_GetTick();
+		  }
+		  //Change State
+		  if (Frequency != 0){
+			  if ((HAL_GetTick() - StepChangeTime ) >= (1000/(Frequency*6))){
+				  if(State<6){ State++; }
+				  else { State=1; }
+				  StepChangeTime= HAL_GetTick();
+			  }
+		  }
+		  if(Frequency>5){
+			  switch (State){
+			  case 1:
+				  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2,0);
+				  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3,0);
+				  HAL_GPIO_WritePin(U_Lo_GPIO_Port, U_Lo_Pin, GPIO_PIN_RESET);
+				  HAL_GPIO_WritePin(W_Lo_GPIO_Port, W_Lo_Pin, GPIO_PIN_RESET);
+				  //1+4
+				  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1,Voltage);
+				  HAL_GPIO_WritePin(V_Lo_GPIO_Port, V_Lo_Pin, GPIO_PIN_SET);
+				  break;
+			  case 2:
+				  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2,0);
+				  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3,0);
+				  HAL_GPIO_WritePin(U_Lo_GPIO_Port, U_Lo_Pin, GPIO_PIN_RESET);
+				  HAL_GPIO_WritePin(V_Lo_GPIO_Port, V_Lo_Pin, GPIO_PIN_RESET);
+				  //1+6
+				  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1,Voltage);
+				  HAL_GPIO_WritePin(W_Lo_GPIO_Port, W_Lo_Pin, GPIO_PIN_SET);
+				  break;
+			  case 3:
+				  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1,0);
+				  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3,0);
+				  HAL_GPIO_WritePin(U_Lo_GPIO_Port, U_Lo_Pin, GPIO_PIN_RESET);
+				  HAL_GPIO_WritePin(V_Lo_GPIO_Port, V_Lo_Pin, GPIO_PIN_RESET);
+				  //3+6
+				  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2,Voltage);
+				  HAL_GPIO_WritePin(W_Lo_GPIO_Port, W_Lo_Pin, GPIO_PIN_SET);
+				  break;
+			  case 4:
+				  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1,0);
+				  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3,0);
+				  HAL_GPIO_WritePin(W_Lo_GPIO_Port, W_Lo_Pin, GPIO_PIN_RESET);
+				  HAL_GPIO_WritePin(V_Lo_GPIO_Port, V_Lo_Pin, GPIO_PIN_RESET);
+				  //3+2
+				  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2,Voltage);
+				  HAL_GPIO_WritePin(U_Lo_GPIO_Port, U_Lo_Pin, GPIO_PIN_SET);
+				  break;
+			  case 5:
+				  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2,0);
+				  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1,0);
+				  HAL_GPIO_WritePin(W_Lo_GPIO_Port, W_Lo_Pin, GPIO_PIN_RESET);
+				  HAL_GPIO_WritePin(V_Lo_GPIO_Port, V_Lo_Pin, GPIO_PIN_RESET);
+				  //5+2
+				  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3,Voltage);
+				  HAL_GPIO_WritePin(U_Lo_GPIO_Port, U_Lo_Pin, GPIO_PIN_SET);
+				  break;
+			  case 6:
+				  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2,0);
+				  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1,0);
+				  HAL_GPIO_WritePin(W_Lo_GPIO_Port, W_Lo_Pin, GPIO_PIN_RESET);
+				  HAL_GPIO_WritePin(U_Lo_GPIO_Port, U_Lo_Pin, GPIO_PIN_RESET);
+				  //4+5
+				  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3,Voltage);
+				  HAL_GPIO_WritePin(V_Lo_GPIO_Port, V_Lo_Pin, GPIO_PIN_SET);
+				  break;
+			  }
 		  }
 	  }
-
-	  switch (State){
-	  case 1:
-		  pwm[1]=pwm[4]=Voltage;
-		  pwm[2]=pwm[3]=pwm[5]=pwm[6]=0;
-		  break;
-	  case 2:
-		  pwm[1]=pwm[6]=Voltage;
-		  pwm[2]=pwm[3]=pwm[4]=pwm[5]=0;
-		  break;
-	  case 3:
-		  pwm[3]=pwm[6]=Voltage;
-		  pwm[1]=pwm[2]=pwm[4]=pwm[5]=0;
-		  break;
-	  case 4:
-		  pwm[2]=pwm[3]=Voltage;
-		  pwm[1]=pwm[4]=pwm[5]=pwm[6]=0;
-		  break;
-	  case 5:
-		  pwm[2]=pwm[5]=Voltage;
-		  pwm[1]=pwm[3]=pwm[4]=pwm[6]=0;
-		  break;
-	  case 6:
-		  pwm[4]=pwm[5]=Voltage;
-		  pwm[1]=pwm[2]=pwm[3]=pwm[6]=0;
-		  break;
+	  else{
+		  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1,0);
+		  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2,0);
+		  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3,0);
+		  HAL_GPIO_WritePin(U_Lo_GPIO_Port, U_Lo_Pin, GPIO_PIN_RESET);
+		  HAL_GPIO_WritePin(V_Lo_GPIO_Port, V_Lo_Pin, GPIO_PIN_RESET);
+		  HAL_GPIO_WritePin(W_Lo_GPIO_Port, W_Lo_Pin, GPIO_PIN_RESET);
 	  }
-	  pwm[1]=pwm[2]=pwm[3]=pwm[4]=pwm[5]=pwm[6]=500;
-	  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1,pwm[1]);
-	  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2,pwm[3]);
-	  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3,pwm[5]);
-
-	  //Update Screen
-//	  char Message[25];
-//	  if ((HAL_GetTick() - ScreenUpdateTime ) >= 20){
-//		  SSD1306_GotoXY(0, 25);
-//		  memset(Message,32,sizeof(Message));
-//		  SSD1306_Puts(Message, &Font_7x10, 1);
-//		  SSD1306_GotoXY(0, 25);
-//		  sprintf(Message,"%ld Hz",Frequency);
-//		  SSD1306_Puts(Message, &Font_7x10, 1);
-//
-//		  SSD1306_GotoXY(64, 25);
-//		  memset(Message,32,sizeof(Message));
-//		  SSD1306_Puts(Message, &Font_7x10, 1);
-//		  SSD1306_GotoXY(64, 25);
-//		  sprintf(Message,"%.0lf Rpm",ActualSpeed);
-//		  SSD1306_Puts(Message, &Font_7x10, 1);
-//
-//		  SSD1306_UpdateScreen();
-//		  ScreenUpdateTime= HAL_GetTick();
-//	  }
 
     /* USER CODE END WHILE */
 
@@ -282,40 +290,6 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
-}
-
-/**
-  * @brief I2C3 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_I2C3_Init(void)
-{
-
-  /* USER CODE BEGIN I2C3_Init 0 */
-
-  /* USER CODE END I2C3_Init 0 */
-
-  /* USER CODE BEGIN I2C3_Init 1 */
-
-  /* USER CODE END I2C3_Init 1 */
-  hi2c3.Instance = I2C3;
-  hi2c3.Init.ClockSpeed = 100000;
-  hi2c3.Init.DutyCycle = I2C_DUTYCYCLE_2;
-  hi2c3.Init.OwnAddress1 = 0;
-  hi2c3.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
-  hi2c3.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
-  hi2c3.Init.OwnAddress2 = 0;
-  hi2c3.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
-  hi2c3.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
-  if (HAL_I2C_Init(&hi2c3) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN I2C3_Init 2 */
-
-  /* USER CODE END I2C3_Init 2 */
-
 }
 
 /**
@@ -446,6 +420,7 @@ static void MX_TIM4_Init(void)
 
   /* USER CODE END TIM4_Init 0 */
 
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
   TIM_MasterConfigTypeDef sMasterConfig = {0};
   TIM_OC_InitTypeDef sConfigOC = {0};
 
@@ -458,6 +433,15 @@ static void MX_TIM4_Init(void)
   htim4.Init.Period = 1000;
   htim4.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim4.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim4) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim4, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
   if (HAL_TIM_PWM_Init(&htim4) != HAL_OK)
   {
     Error_Handler();
@@ -593,6 +577,9 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_RESET);
 
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOC, U_Lo_Pin|V_Lo_Pin|W_Lo_Pin, GPIO_PIN_RESET);
+
   /*Configure GPIO pin : B1_Pin */
   GPIO_InitStruct.Pin = B1_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
@@ -605,6 +592,13 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(LD2_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : U_Lo_Pin V_Lo_Pin W_Lo_Pin */
+  GPIO_InitStruct.Pin = U_Lo_Pin|V_Lo_Pin|W_Lo_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
 /* USER CODE BEGIN MX_GPIO_Init_2 */
 /* USER CODE END MX_GPIO_Init_2 */
