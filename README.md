@@ -1,6 +1,8 @@
 # InductionMotorControl
 Controlling 3 Phase AC Asynchronous Induction Motor
-
+<details>
+<summary> Preparation </summary>
+  
 <details>
   
 <summary> Motor Nameplate </summary>
@@ -61,4 +63,5 @@ PCB came very good. had to change couple resistors and design a base for it:
 ![image](https://github.com/GhajariAli/InductionMotorControl/assets/124516346/dc448794-1e92-4b78-886b-6795ac4cf47f)
 
 and IT WORKS THE FIRST TRY!
+</details>
 </details>
