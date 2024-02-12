@@ -59,6 +59,8 @@ int32_t EncoderValue=0;
 int32_t EncoderMeasureTime=0;
 int32_t PreviousEncoderValue=0;
 double ActualSpeed=0;
+int Enable=0;
+int ToggleEnable=0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -140,86 +142,103 @@ int main(void)
 
   while (1)
   {
-	  //Calculate RPM
-	  //read every 10ms so *100*60 to be per minute
-	  //1024*4 pulse / revolution on encoder
-	  //Pully ratio 20:50
-	  if ((HAL_GetTick()-EncoderMeasureTime)>=10 ){
-	  		  ActualSpeed=(EncoderValue-PreviousEncoderValue)*((60*100)*20)/(1024*4*50);
-	  		  PreviousEncoderValue=EncoderValue;
-	  		  EncoderMeasureTime= HAL_GetTick();
+	  if(HAL_GPIO_ReadPin(B1_GPIO_Port, B1_Pin)) ToggleEnable=1;
+	  while (!HAL_GPIO_ReadPin(B1_GPIO_Port, B1_Pin) && ToggleEnable){
+		  if (Enable) Enable=0;
+		  else Enable=1;
+		  ToggleEnable=0;
 	  }
-	  //Ramp Frequency
-	  if ((RequestedFrequency > Frequency) && ((HAL_GetTick()-FrequencyChangeTime)>=100 )){
-		  Frequency++;
-		  FrequencyChangeTime= HAL_GetTick();
-	  }
-	  //Change State
-	  if (Frequency != 0){
-		  if ((HAL_GetTick() - StepChangeTime ) >= (1000/(Frequency*6))){
-			  if(State<6){ State++; }
-			  else { State=1; }
-			  StepChangeTime= HAL_GetTick();
+	  if(Enable){
+		  //Calculate RPM
+		  //read every 10ms so *100*60 to be per minute
+		  //1024*4 pulse / revolution on encoder
+		  //Pully ratio 20:50
+		  if ((HAL_GetTick()-EncoderMeasureTime)>=10 ){
+				  ActualSpeed=(EncoderValue-PreviousEncoderValue)*((60*100)*20)/(1024*4*50);
+				  PreviousEncoderValue=EncoderValue;
+				  EncoderMeasureTime= HAL_GetTick();
+		  }
+		  //Ramp Frequency
+		  if ((RequestedFrequency > Frequency) && ((HAL_GetTick()-FrequencyChangeTime)>=100 )){
+			  Frequency++;
+			  FrequencyChangeTime= HAL_GetTick();
+		  }
+		  //Change State
+		  if (Frequency != 0){
+			  if ((HAL_GetTick() - StepChangeTime ) >= (1000/(Frequency*6))){
+				  if(State<6){ State++; }
+				  else { State=1; }
+				  StepChangeTime= HAL_GetTick();
+			  }
+		  }
+		  if(Frequency>5){
+			  switch (State){
+			  case 1:
+				  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2,0);
+				  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3,0);
+				  HAL_GPIO_WritePin(U_Lo_GPIO_Port, U_Lo_Pin, GPIO_PIN_RESET);
+				  HAL_GPIO_WritePin(W_Lo_GPIO_Port, W_Lo_Pin, GPIO_PIN_RESET);
+				  //1+4
+				  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1,Voltage);
+				  HAL_GPIO_WritePin(V_Lo_GPIO_Port, V_Lo_Pin, GPIO_PIN_SET);
+				  break;
+			  case 2:
+				  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2,0);
+				  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3,0);
+				  HAL_GPIO_WritePin(U_Lo_GPIO_Port, U_Lo_Pin, GPIO_PIN_RESET);
+				  HAL_GPIO_WritePin(V_Lo_GPIO_Port, V_Lo_Pin, GPIO_PIN_RESET);
+				  //1+6
+				  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1,Voltage);
+				  HAL_GPIO_WritePin(W_Lo_GPIO_Port, W_Lo_Pin, GPIO_PIN_SET);
+				  break;
+			  case 3:
+				  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1,0);
+				  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3,0);
+				  HAL_GPIO_WritePin(U_Lo_GPIO_Port, U_Lo_Pin, GPIO_PIN_RESET);
+				  HAL_GPIO_WritePin(V_Lo_GPIO_Port, V_Lo_Pin, GPIO_PIN_RESET);
+				  //3+6
+				  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2,Voltage);
+				  HAL_GPIO_WritePin(W_Lo_GPIO_Port, W_Lo_Pin, GPIO_PIN_SET);
+				  break;
+			  case 4:
+				  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1,0);
+				  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3,0);
+				  HAL_GPIO_WritePin(W_Lo_GPIO_Port, W_Lo_Pin, GPIO_PIN_RESET);
+				  HAL_GPIO_WritePin(V_Lo_GPIO_Port, V_Lo_Pin, GPIO_PIN_RESET);
+				  //3+2
+				  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2,Voltage);
+				  HAL_GPIO_WritePin(U_Lo_GPIO_Port, U_Lo_Pin, GPIO_PIN_SET);
+				  break;
+			  case 5:
+				  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2,0);
+				  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1,0);
+				  HAL_GPIO_WritePin(W_Lo_GPIO_Port, W_Lo_Pin, GPIO_PIN_RESET);
+				  HAL_GPIO_WritePin(V_Lo_GPIO_Port, V_Lo_Pin, GPIO_PIN_RESET);
+				  //5+2
+				  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3,Voltage);
+				  HAL_GPIO_WritePin(U_Lo_GPIO_Port, U_Lo_Pin, GPIO_PIN_SET);
+				  break;
+			  case 6:
+				  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2,0);
+				  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1,0);
+				  HAL_GPIO_WritePin(W_Lo_GPIO_Port, W_Lo_Pin, GPIO_PIN_RESET);
+				  HAL_GPIO_WritePin(U_Lo_GPIO_Port, U_Lo_Pin, GPIO_PIN_RESET);
+				  //4+5
+				  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3,Voltage);
+				  HAL_GPIO_WritePin(V_Lo_GPIO_Port, V_Lo_Pin, GPIO_PIN_SET);
+				  break;
+			  }
 		  }
 	  }
-	  if(Frequency>5){
-		  switch (State){
-		  case 1:
-			  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2,0);
-			  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3,0);
-			  HAL_GPIO_WritePin(U_Lo_GPIO_Port, U_Lo_Pin, GPIO_PIN_RESET);
-			  HAL_GPIO_WritePin(W_Lo_GPIO_Port, W_Lo_Pin, GPIO_PIN_RESET);
-			  //1+4
-			  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1,Voltage);
-			  HAL_GPIO_WritePin(V_Lo_GPIO_Port, V_Lo_Pin, GPIO_PIN_SET);
-			  break;
-		  case 2:
-			  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2,0);
-			  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3,0);
-			  HAL_GPIO_WritePin(U_Lo_GPIO_Port, U_Lo_Pin, GPIO_PIN_RESET);
-			  HAL_GPIO_WritePin(V_Lo_GPIO_Port, V_Lo_Pin, GPIO_PIN_RESET);
-			  //1+6
-			  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1,Voltage);
-			  HAL_GPIO_WritePin(W_Lo_GPIO_Port, W_Lo_Pin, GPIO_PIN_SET);
-			  break;
-		  case 3:
-			  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1,0);
-			  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3,0);
-			  HAL_GPIO_WritePin(U_Lo_GPIO_Port, U_Lo_Pin, GPIO_PIN_RESET);
-			  HAL_GPIO_WritePin(V_Lo_GPIO_Port, V_Lo_Pin, GPIO_PIN_RESET);
-			  //3+6
-			  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2,Voltage);
-			  HAL_GPIO_WritePin(W_Lo_GPIO_Port, W_Lo_Pin, GPIO_PIN_SET);
-			  break;
-		  case 4:
-			  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1,0);
-			  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3,0);
-			  HAL_GPIO_WritePin(W_Lo_GPIO_Port, W_Lo_Pin, GPIO_PIN_RESET);
-			  HAL_GPIO_WritePin(V_Lo_GPIO_Port, V_Lo_Pin, GPIO_PIN_RESET);
-			  //3+2
-			  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2,Voltage);
-			  HAL_GPIO_WritePin(U_Lo_GPIO_Port, U_Lo_Pin, GPIO_PIN_SET);
-			  break;
-		  case 5:
-			  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2,0);
-			  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3,0);
-			  HAL_GPIO_WritePin(W_Lo_GPIO_Port, W_Lo_Pin, GPIO_PIN_RESET);
-			  HAL_GPIO_WritePin(V_Lo_GPIO_Port, V_Lo_Pin, GPIO_PIN_RESET);
-			  //5+2
-			  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3,Voltage);
-			  HAL_GPIO_WritePin(U_Lo_GPIO_Port, U_Lo_Pin, GPIO_PIN_SET);
-			  break;
-		  case 6:
-			  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2,0);
-			  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3,0);
-			  HAL_GPIO_WritePin(W_Lo_GPIO_Port, W_Lo_Pin, GPIO_PIN_RESET);
-			  HAL_GPIO_WritePin(U_Lo_GPIO_Port, U_Lo_Pin, GPIO_PIN_RESET);
-			  //4+5
-			  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3,Voltage);
-			  HAL_GPIO_WritePin(V_Lo_GPIO_Port, V_Lo_Pin, GPIO_PIN_SET);
-			  break;
-		  }
+	  else{
+		  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1,0);
+		  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2,0);
+		  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3,0);
+		  HAL_GPIO_WritePin(U_Lo_GPIO_Port, U_Lo_Pin, GPIO_PIN_RESET);
+		  HAL_GPIO_WritePin(V_Lo_GPIO_Port, V_Lo_Pin, GPIO_PIN_RESET);
+		  HAL_GPIO_WritePin(W_Lo_GPIO_Port, W_Lo_Pin, GPIO_PIN_RESET);
 	  }
+
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
