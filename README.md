@@ -44,6 +44,21 @@ Below is what I've designed to mount the encoder, you'll find all 3D models in t
 
 ![image](https://github.com/GhajariAli/InductionMotorControl/assets/124516346/8133c074-e35b-4a94-ba1a-8fad14bfdc7c)
 
+Update: had to dessign and print the belt with TPU as it was not standard size turned out good:
+![image](https://github.com/GhajariAli/InductionMotorControl/assets/124516346/2ccf072d-3609-425e-9b5c-a8dbe1ca8d47)![image](https://github.com/GhajariAli/InductionMotorControl/assets/124516346/12f8af9a-5037-403b-a2b7-296931cb89d1)
+
+</details>
 
 
+<details>
+  
+<summary> Testing the PCB </summary>
+PCB came very good. had to change couple resistors and design a base for it:
+
+![image](https://github.com/GhajariAli/InductionMotorControl/assets/124516346/a908310f-9bc8-4ede-8330-97254afd50d5)
+
+
+![image](https://github.com/GhajariAli/InductionMotorControl/assets/124516346/dc448794-1e92-4b78-886b-6795ac4cf47f)
+
+and IT WORKS THE FIRST TRY!
 </details>
