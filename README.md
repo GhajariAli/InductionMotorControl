@@ -1,5 +1,8 @@
 # InductionMotorControl
 Controlling 3 Phase AC Asynchronous Induction Motor
+
+Check [This](https://github.com/GhajariAli/DCMotorControl) Repo for DC motor Control
+
 <details>
 <summary> Preparation </summary>
   
