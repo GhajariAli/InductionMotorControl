@@ -22,6 +22,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <stdio.h>
+#include <math.h>
 #include "Sbus.h"
 /* USER CODE END Includes */
 
@@ -32,6 +33,8 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+#define MAX_FREQUENCY 200
+#define MIN_FREQUENCY 10
 
 /* USER CODE END PD */
 
@@ -44,6 +47,7 @@
 TIM_HandleTypeDef htim2;
 TIM_HandleTypeDef htim3;
 TIM_HandleTypeDef htim4;
+TIM_HandleTypeDef htim10;
 
 UART_HandleTypeDef huart2;
 UART_HandleTypeDef huart6;
@@ -61,6 +65,17 @@ int32_t PreviousEncoderValue=0;
 double ActualSpeed=0;
 int Enable=0;
 int ToggleEnable=0;
+int UpdateState = 0;
+uint32_t  VoltageAmplitude = 1000;
+uint32_t  Frequency = MIN_FREQUENCY;
+uint32_t  RequestedFrequency = 40;
+uint32_t  SPWM_Update = 0;
+uint32_t  PWM_U = 0;
+uint32_t  PWM_V = 0;
+uint32_t  PWM_W = 0;
+int Start_CH1 = 0;
+int Start_CH2 = 0;
+int Start_CH3 = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -72,11 +87,17 @@ static void MX_TIM2_Init(void);
 static void MX_TIM3_Init(void);
 static void MX_USART6_UART_Init(void);
 static void MX_TIM4_Init(void);
+static void MX_TIM10_Init(void);
 /* USER CODE BEGIN PFP */
 void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim){
 	if (htim == &htim3){
 		EncoderValue = __HAL_TIM_GET_COUNTER(htim);
 	}
+}
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
+	if (htim->Instance == TIM10){
+		SPWM_Update=1;
+		}
 }
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
 	if (huart == &huart6){
@@ -124,24 +145,26 @@ int main(void)
   MX_TIM3_Init();
   MX_USART6_UART_Init();
   MX_TIM4_Init();
+  MX_TIM10_Init();
   /* USER CODE BEGIN 2 */
   HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_1);
   HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_2);
   HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_3);
   HAL_TIM_Encoder_Start_IT(&htim3,TIM_CHANNEL_ALL);
-
+  HAL_TIM_Base_Start_IT(&htim10);
   HAL_UART_Receive_DMA(&huart6, &receivedSBUS.ReceivedData[0], SBUS_LEN);
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  uint32_t 	Voltage=700;
-  uint32_t 	Frequency=10;
-  uint32_t 	RequestedFrequency=30;
-  State=1;
+
+
+
+  State = 1;
 
   while (1)
   {
+	  //enable/disable by push button
 	  if(HAL_GPIO_ReadPin(B1_GPIO_Port, B1_Pin)) ToggleEnable=1;
 	  while (!HAL_GPIO_ReadPin(B1_GPIO_Port, B1_Pin) && ToggleEnable){
 		  if (Enable) Enable=0;
@@ -149,6 +172,25 @@ int main(void)
 		  ToggleEnable=0;
 	  }
 	  if(Enable){
+		  //Generating Sinusoidal PWM
+		  if (SPWM_Update){
+			  if (Start_CH1){
+			  	PWM_U=trunc(sin((3*M_PI*Start_CH1*Frequency)/(10000))*VoltageAmplitude);
+			  	Start_CH1=Start_CH1+1;
+			  }
+			  else PWM_U=0;
+			  if (Start_CH2){
+			    PWM_V=trunc(sin((3*M_PI*Start_CH2*Frequency)/(10000))*VoltageAmplitude);
+			    Start_CH2=Start_CH2+1;
+			  }
+			  else PWM_V=0;
+			  if (Start_CH3){
+			    PWM_W=trunc(sin((3*M_PI*Start_CH3*Frequency)/(10000))*VoltageAmplitude);
+			    Start_CH3=Start_CH3+1;
+			  }
+			  else PWM_W=0;
+			  SPWM_Update=0;
+		  }
 		  //Calculate RPM
 		  //read every 10ms so *100*60 to be per minute
 		  //1024*4 pulse / revolution on encoder
@@ -159,7 +201,7 @@ int main(void)
 				  EncoderMeasureTime= HAL_GetTick();
 		  }
 		  //Ramp Frequency
-		  if ((RequestedFrequency > Frequency) && ((HAL_GetTick()-FrequencyChangeTime)>=100 )){
+		  if ((RequestedFrequency > Frequency) && ((HAL_GetTick()-FrequencyChangeTime)>=200 )){
 			  Frequency++;
 			  FrequencyChangeTime= HAL_GetTick();
 		  }
@@ -168,77 +210,88 @@ int main(void)
 			  if ((HAL_GetTick() - StepChangeTime ) >= (1000/(Frequency*6))){
 				  if(State<6){ State++; }
 				  else { State=1; }
+				  UpdateState=1;
 				  StepChangeTime= HAL_GetTick();
 			  }
 		  }
-		  if(Frequency>5){
+		  if(Frequency >=MIN_FREQUENCY && Frequency <= MAX_FREQUENCY && UpdateState==1){
 			  switch (State){
 			  case 1:
-				  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2,0);
-				  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3,0);
 				  HAL_GPIO_WritePin(U_Lo_GPIO_Port, U_Lo_Pin, GPIO_PIN_RESET);
 				  HAL_GPIO_WritePin(W_Lo_GPIO_Port, W_Lo_Pin, GPIO_PIN_RESET);
+				  Start_CH2=0;
+				  Start_CH3=0;
 				  //1+4
-				  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1,Voltage);
+				  Start_CH1=1;
 				  HAL_GPIO_WritePin(V_Lo_GPIO_Port, V_Lo_Pin, GPIO_PIN_SET);
+				  UpdateState=0;
 				  break;
 			  case 2:
-				  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2,0);
-				  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3,0);
 				  HAL_GPIO_WritePin(U_Lo_GPIO_Port, U_Lo_Pin, GPIO_PIN_RESET);
 				  HAL_GPIO_WritePin(V_Lo_GPIO_Port, V_Lo_Pin, GPIO_PIN_RESET);
+				  Start_CH2=0;
+				  Start_CH3=0;
 				  //1+6
-				  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1,Voltage);
 				  HAL_GPIO_WritePin(W_Lo_GPIO_Port, W_Lo_Pin, GPIO_PIN_SET);
+				  UpdateState=0;
 				  break;
 			  case 3:
-				  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1,0);
-				  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3,0);
 				  HAL_GPIO_WritePin(U_Lo_GPIO_Port, U_Lo_Pin, GPIO_PIN_RESET);
 				  HAL_GPIO_WritePin(V_Lo_GPIO_Port, V_Lo_Pin, GPIO_PIN_RESET);
+				  Start_CH1=0;
+				  Start_CH3=0;
 				  //3+6
-				  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2,Voltage);
+				  Start_CH2=1;
 				  HAL_GPIO_WritePin(W_Lo_GPIO_Port, W_Lo_Pin, GPIO_PIN_SET);
+				  UpdateState=0;
 				  break;
 			  case 4:
-				  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1,0);
-				  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3,0);
 				  HAL_GPIO_WritePin(W_Lo_GPIO_Port, W_Lo_Pin, GPIO_PIN_RESET);
 				  HAL_GPIO_WritePin(V_Lo_GPIO_Port, V_Lo_Pin, GPIO_PIN_RESET);
+				  Start_CH1=0;
+				  Start_CH3=0;
 				  //3+2
-				  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2,Voltage);
 				  HAL_GPIO_WritePin(U_Lo_GPIO_Port, U_Lo_Pin, GPIO_PIN_SET);
+				  UpdateState=0;
 				  break;
 			  case 5:
-				  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2,0);
-				  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1,0);
 				  HAL_GPIO_WritePin(W_Lo_GPIO_Port, W_Lo_Pin, GPIO_PIN_RESET);
 				  HAL_GPIO_WritePin(V_Lo_GPIO_Port, V_Lo_Pin, GPIO_PIN_RESET);
+				  Start_CH1=0;
+				  Start_CH2=0;
 				  //5+2
-				  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3,Voltage);
+				  Start_CH3=1;
 				  HAL_GPIO_WritePin(U_Lo_GPIO_Port, U_Lo_Pin, GPIO_PIN_SET);
+				  UpdateState=0;
 				  break;
 			  case 6:
-				  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2,0);
-				  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1,0);
 				  HAL_GPIO_WritePin(W_Lo_GPIO_Port, W_Lo_Pin, GPIO_PIN_RESET);
 				  HAL_GPIO_WritePin(U_Lo_GPIO_Port, U_Lo_Pin, GPIO_PIN_RESET);
+				  Start_CH1=0;
+				  Start_CH2=0;
 				  //4+5
-				  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3,Voltage);
 				  HAL_GPIO_WritePin(V_Lo_GPIO_Port, V_Lo_Pin, GPIO_PIN_SET);
+				  UpdateState=0;
 				  break;
 			  }
 		  }
 	  }
-	  else{
-		  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1,0);
-		  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2,0);
-		  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3,0);
+	  else {
+		  Start_CH1=0;
+		  Start_CH2=0;
+		  Start_CH3=0;
+		  PWM_U=0;
+		  PWM_V=0;
+		  PWM_W=0;
+		  Frequency=MIN_FREQUENCY;
 		  HAL_GPIO_WritePin(U_Lo_GPIO_Port, U_Lo_Pin, GPIO_PIN_RESET);
 		  HAL_GPIO_WritePin(V_Lo_GPIO_Port, V_Lo_Pin, GPIO_PIN_RESET);
 		  HAL_GPIO_WritePin(W_Lo_GPIO_Port, W_Lo_Pin, GPIO_PIN_RESET);
 	  }
 
+	  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1,PWM_U);
+	  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2,PWM_V);
+	  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3,PWM_W);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -472,6 +525,37 @@ static void MX_TIM4_Init(void)
 
   /* USER CODE END TIM4_Init 2 */
   HAL_TIM_MspPostInit(&htim4);
+
+}
+
+/**
+  * @brief TIM10 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM10_Init(void)
+{
+
+  /* USER CODE BEGIN TIM10_Init 0 */
+
+  /* USER CODE END TIM10_Init 0 */
+
+  /* USER CODE BEGIN TIM10_Init 1 */
+
+  /* USER CODE END TIM10_Init 1 */
+  htim10.Instance = TIM10;
+  htim10.Init.Prescaler = 0;
+  htim10.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim10.Init.Period = 10000;
+  htim10.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim10.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim10) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM10_Init 2 */
+
+  /* USER CODE END TIM10_Init 2 */
 
 }
 
