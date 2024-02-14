@@ -175,18 +175,18 @@ int main(void)
 		  //Generating Sinusoidal PWM
 		  if (SPWM_Update){
 			  if (Start_CH1){
-			  	PWM_U=trunc(sin((3*M_PI*Start_CH1*Frequency)/(10000))*VoltageAmplitude);
-			  	Start_CH1=Start_CH1+1;
+			  	PWM_U=trunc(sin((2*M_PI*Start_CH1*Frequency)/(10000))*VoltageAmplitude);
+			  	if (Start_CH1<10000) Start_CH1=Start_CH1+1;
 			  }
 			  else PWM_U=0;
 			  if (Start_CH2){
-			    PWM_V=trunc(sin((3*M_PI*Start_CH2*Frequency)/(10000))*VoltageAmplitude);
-			    Start_CH2=Start_CH2+1;
+			    PWM_V=trunc(sin((2*M_PI*Start_CH2*Frequency)/(10000))*VoltageAmplitude);
+			    if (Start_CH2<10000) Start_CH2=Start_CH2+1;
 			  }
 			  else PWM_V=0;
 			  if (Start_CH3){
-			    PWM_W=trunc(sin((3*M_PI*Start_CH3*Frequency)/(10000))*VoltageAmplitude);
-			    Start_CH3=Start_CH3+1;
+			    PWM_W=trunc(sin((2*M_PI*Start_CH3*Frequency)/(10000))*VoltageAmplitude);
+			    if (Start_CH3<10000) Start_CH3=Start_CH3+1;
 			  }
 			  else PWM_W=0;
 			  SPWM_Update=0;
@@ -218,58 +218,40 @@ int main(void)
 			  switch (State){
 			  case 1:
 				  HAL_GPIO_WritePin(U_Lo_GPIO_Port, U_Lo_Pin, GPIO_PIN_RESET);
-				  HAL_GPIO_WritePin(W_Lo_GPIO_Port, W_Lo_Pin, GPIO_PIN_RESET);
-				  Start_CH2=0;
-				  Start_CH3=0;
-				  //1+4
+				  //S1+S4+S5
 				  Start_CH1=1;
 				  HAL_GPIO_WritePin(V_Lo_GPIO_Port, V_Lo_Pin, GPIO_PIN_SET);
 				  UpdateState=0;
 				  break;
 			  case 2:
-				  HAL_GPIO_WritePin(U_Lo_GPIO_Port, U_Lo_Pin, GPIO_PIN_RESET);
-				  HAL_GPIO_WritePin(V_Lo_GPIO_Port, V_Lo_Pin, GPIO_PIN_RESET);
-				  Start_CH2=0;
 				  Start_CH3=0;
-				  //1+6
+				  //S1+S4+S6
 				  HAL_GPIO_WritePin(W_Lo_GPIO_Port, W_Lo_Pin, GPIO_PIN_SET);
 				  UpdateState=0;
 				  break;
 			  case 3:
-				  HAL_GPIO_WritePin(U_Lo_GPIO_Port, U_Lo_Pin, GPIO_PIN_RESET);
 				  HAL_GPIO_WritePin(V_Lo_GPIO_Port, V_Lo_Pin, GPIO_PIN_RESET);
-				  Start_CH1=0;
-				  Start_CH3=0;
-				  //3+6
+				  //S1+S3+S6
 				  Start_CH2=1;
 				  HAL_GPIO_WritePin(W_Lo_GPIO_Port, W_Lo_Pin, GPIO_PIN_SET);
 				  UpdateState=0;
 				  break;
 			  case 4:
-				  HAL_GPIO_WritePin(W_Lo_GPIO_Port, W_Lo_Pin, GPIO_PIN_RESET);
-				  HAL_GPIO_WritePin(V_Lo_GPIO_Port, V_Lo_Pin, GPIO_PIN_RESET);
 				  Start_CH1=0;
-				  Start_CH3=0;
-				  //3+2
+				  //S2+S3+S6
 				  HAL_GPIO_WritePin(U_Lo_GPIO_Port, U_Lo_Pin, GPIO_PIN_SET);
 				  UpdateState=0;
 				  break;
 			  case 5:
 				  HAL_GPIO_WritePin(W_Lo_GPIO_Port, W_Lo_Pin, GPIO_PIN_RESET);
-				  HAL_GPIO_WritePin(V_Lo_GPIO_Port, V_Lo_Pin, GPIO_PIN_RESET);
-				  Start_CH1=0;
-				  Start_CH2=0;
-				  //5+2
+				  //S2+S3+S5
 				  Start_CH3=1;
-				  HAL_GPIO_WritePin(U_Lo_GPIO_Port, U_Lo_Pin, GPIO_PIN_SET);
 				  UpdateState=0;
 				  break;
 			  case 6:
 				  HAL_GPIO_WritePin(W_Lo_GPIO_Port, W_Lo_Pin, GPIO_PIN_RESET);
-				  HAL_GPIO_WritePin(U_Lo_GPIO_Port, U_Lo_Pin, GPIO_PIN_RESET);
-				  Start_CH1=0;
 				  Start_CH2=0;
-				  //4+5
+				  //S2+S4+S5
 				  HAL_GPIO_WritePin(V_Lo_GPIO_Port, V_Lo_Pin, GPIO_PIN_SET);
 				  UpdateState=0;
 				  break;
