@@ -71,5 +71,7 @@ Check [This](https://github.com/GhajariAli/DCMotorControl) Repo for DC motor Con
 
 <details>
 <summary> SPWM speed Control </summary>
-  Coming soon
+  
+  ![image](https://github.com/GhajariAli/InductionMotorControl/assets/124516346/6f450de8-868a-4954-a6fa-8d99349a4dc9)
+
 </details>
