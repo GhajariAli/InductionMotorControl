@@ -74,4 +74,5 @@ Check [This](https://github.com/GhajariAli/DCMotorControl) Repo for DC motor Con
   
   ![image](https://github.com/GhajariAli/InductionMotorControl/assets/124516346/6f450de8-868a-4954-a6fa-8d99349a4dc9)
 
+this made the motor run smoother, current is now lower and it makes less noise.
 </details>
