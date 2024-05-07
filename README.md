@@ -71,6 +71,11 @@ Check [This](https://github.com/GhajariAli/DCMotorControl) Repo for DC motor Con
 
 <details>
 <summary> SPWM speed Control </summary>
+  Here is the low and high side signals
+
+  ![image](https://github.com/GhajariAli/InductionMotorControl/assets/124516346/c7007b84-3b5b-49c3-96b8-952e836f0275)
+
+  and here is the final output 3phase
   
   ![image](https://github.com/GhajariAli/InductionMotorControl/assets/124516346/6f450de8-868a-4954-a6fa-8d99349a4dc9)
 
