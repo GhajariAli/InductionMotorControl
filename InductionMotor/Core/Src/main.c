@@ -64,7 +64,7 @@ double ActualSpeed=0;
 int Enable=0;
 int ToggleEnable=0;
 int UpdateState = 0;
-uint32_t  RequestedFrequency = 25;
+uint32_t  RequestedFrequency = 10;
 
 ST_SineWave SineWave;
 int HundredMicroSecond;
@@ -154,7 +154,7 @@ int main(void)
   /* USER CODE BEGIN WHILE */
 
   SineWave.WaveFrequency=MIN_FREQUENCY;
-  SineWave.VoltageAmplitude= 500;
+  SineWave.VoltageAmplitude= 280;
 
   State = 1;
 
@@ -187,7 +187,7 @@ int main(void)
 		  }
 		  //Change State
 		  if (SineWave.WaveFrequency != 0){
-			  if ((HAL_GetTick() - StepChangeTime ) >= (1000/(SineWave.WaveFrequency*6))){
+			  if ((HAL_GetTick() - StepChangeTime ) >= (1000.0/(SineWave.WaveFrequency*6))){
 				  if(State<6){ State++; }
 				  else { State=1; }
 				  UpdateState=1;
@@ -196,46 +196,37 @@ int main(void)
 		  }
 		  if(SineWave.WaveFrequency >=MIN_FREQUENCY && SineWave.WaveFrequency <= MAX_FREQUENCY && UpdateState==1){
 			  switch (State){
-			  case 1:
-				  HAL_GPIO_WritePin(U_Lo_GPIO_Port, U_Lo_Pin, GPIO_PIN_RESET);
-				  //S1+S4+S5
-				  SineWave.PhaseA_t=1;
-				  HAL_GPIO_WritePin(V_Lo_GPIO_Port, V_Lo_Pin, GPIO_PIN_SET);
-				  UpdateState=0;
-				  break;
-			  case 2:
-				  SineWave.PhaseC_t=0;
-				  //S1+S4+S6
-				  HAL_GPIO_WritePin(W_Lo_GPIO_Port, W_Lo_Pin, GPIO_PIN_SET);
-				  UpdateState=0;
-				  break;
-			  case 3:
-				  HAL_GPIO_WritePin(V_Lo_GPIO_Port, V_Lo_Pin, GPIO_PIN_RESET);
-				  //S1+S3+S6
-				  SineWave.PhaseB_t=1;
-				  HAL_GPIO_WritePin(W_Lo_GPIO_Port, W_Lo_Pin, GPIO_PIN_SET);
-				  UpdateState=0;
-				  break;
-			  case 4:
-				  SineWave.PhaseA_t=0;
-				  //S2+S3+S6
-				  HAL_GPIO_WritePin(U_Lo_GPIO_Port, U_Lo_Pin, GPIO_PIN_SET);
-				  UpdateState=0;
-				  break;
-			  case 5:
-				  HAL_GPIO_WritePin(W_Lo_GPIO_Port, W_Lo_Pin, GPIO_PIN_RESET);
-				  //S2+S3+S5
-				  SineWave.PhaseC_t=1;
-				  UpdateState=0;
-				  break;
-			  case 6:
-				  HAL_GPIO_WritePin(W_Lo_GPIO_Port, W_Lo_Pin, GPIO_PIN_RESET);
-				  SineWave.PhaseB_t=0;
-				  //S2+S4+S5
-				  HAL_GPIO_WritePin(V_Lo_GPIO_Port, V_Lo_Pin, GPIO_PIN_SET);
-				  UpdateState=0;
-				  break;
-			  }
+				  case 1:
+					  HAL_GPIO_WritePin(U_Lo_GPIO_Port, U_Lo_Pin, GPIO_PIN_RESET);
+					  SineWave.PhaseA_t=1;
+					  UpdateState=0;
+					  break;
+				  case 2:
+					  SineWave.PhaseC_t=0;
+					  HAL_GPIO_WritePin(W_Lo_GPIO_Port, W_Lo_Pin, GPIO_PIN_SET);
+					  UpdateState=0;
+					  break;
+				  case 3:
+					  HAL_GPIO_WritePin(V_Lo_GPIO_Port, V_Lo_Pin, GPIO_PIN_RESET);
+					  SineWave.PhaseB_t=1;
+					  UpdateState=0;
+					  break;
+				  case 4:
+					  SineWave.PhaseA_t=0;
+					  HAL_GPIO_WritePin(U_Lo_GPIO_Port, U_Lo_Pin, GPIO_PIN_SET);
+					  UpdateState=0;
+					  break;
+				  case 5:
+					  HAL_GPIO_WritePin(W_Lo_GPIO_Port, W_Lo_Pin, GPIO_PIN_RESET);
+					  SineWave.PhaseC_t=1;
+					  UpdateState=0;
+					  break;
+				  case 6:
+					  SineWave.PhaseB_t=0;
+					  HAL_GPIO_WritePin(V_Lo_GPIO_Port, V_Lo_Pin, GPIO_PIN_SET);
+					  UpdateState=0;
+					  break;
+				  }
 		  }
 	  }
 	  else {
@@ -624,7 +615,7 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOC, U_Lo_Pin|V_Lo_Pin|W_Lo_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOC, V_Lo_Pin|U_Lo_Pin|W_Lo_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin : B1_Pin */
   GPIO_InitStruct.Pin = B1_Pin;
@@ -639,8 +630,8 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(LD2_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : U_Lo_Pin V_Lo_Pin W_Lo_Pin */
-  GPIO_InitStruct.Pin = U_Lo_Pin|V_Lo_Pin|W_Lo_Pin;
+  /*Configure GPIO pins : V_Lo_Pin U_Lo_Pin W_Lo_Pin */
+  GPIO_InitStruct.Pin = V_Lo_Pin|U_Lo_Pin|W_Lo_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;

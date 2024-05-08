@@ -1,3 +1,4 @@
+"./Core/Src/MotorSequencer.o"
 "./Core/Src/Sbus.o"
 "./Core/Src/SineWave.o"
 "./Core/Src/main.o"
