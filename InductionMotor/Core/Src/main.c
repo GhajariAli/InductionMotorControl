@@ -29,7 +29,11 @@
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
-
+typedef enum{
+	Off=0,
+	Forward=1,
+	Reverse=2
+}StateMachine;
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -56,16 +60,18 @@ tsbus receivedSBUS;
 uint32_t StepChangeTime=0;
 uint32_t FrequencyChangeTime=0;
 uint32_t ScreenUpdateTime=0;
-int State=1;
+int Step=1;
+StateMachine State=Off;
+StateMachine PreviousState=Forward;
 int32_t EncoderValue=0;
 int32_t EncoderMeasureTime=0;
 int32_t PreviousEncoderValue=0;
 double ActualSpeed=0;
 int Enable=0;
-int ToggleEnable=0;
+int ToggleState=0;
 int UpdateState = 0;
-uint32_t  RequestedFrequency = 10;
-
+uint32_t  RequestedFrequency = 30;
+int Direction=0;
 ST_SineWave SineWave;
 int HundredMicroSecond;
 /* USER CODE END PV */
@@ -154,9 +160,9 @@ int main(void)
   /* USER CODE BEGIN WHILE */
 
   SineWave.WaveFrequency=MIN_FREQUENCY;
-  SineWave.VoltageAmplitude= 280;
+  SineWave.VoltageAmplitude= 1000;
 
-  State = 1;
+  Step = 1;
 
   while (1)
   {
@@ -171,12 +177,28 @@ int main(void)
 			  EncoderMeasureTime= HAL_GetTick();
 	  }
 	  //enable/disable by push button
-	  if(HAL_GPIO_ReadPin(B1_GPIO_Port, B1_Pin)) ToggleEnable=1;
-	  while (!HAL_GPIO_ReadPin(B1_GPIO_Port, B1_Pin) && ToggleEnable){
-		  if (Enable) Enable=0;
-		  else Enable=1;
-		  ToggleEnable=0;
+	  if(HAL_GPIO_ReadPin(B1_GPIO_Port, B1_Pin)) ToggleState=1;
+	  while (!HAL_GPIO_ReadPin(B1_GPIO_Port, B1_Pin) && ToggleState){
+		  if (State==Forward || State==Reverse) State=Off;
+		  else if (State==Off && PreviousState==Reverse) State=PreviousState=Forward;
+		  else if (State==Off && PreviousState==Forward) State=PreviousState=Reverse;
+		  ToggleState=0;
 	  }
+	  //State Machine
+	  switch(State){
+	  	  case	Off:
+	  		  Enable=0;
+	  		  break;
+	  	  case Forward:
+	  		  Enable=1;
+	  		  Direction=1;
+	  		  break;
+	  	  case Reverse:
+	  		  Enable=1;
+	  		  Direction=0;
+	  		  break;
+	  }
+
 	  if(Enable){
 		  //Generating Sinusoidal PWM
 		  GenerateSine(&SineWave, &HundredMicroSecond);
@@ -188,14 +210,21 @@ int main(void)
 		  //Change State
 		  if (SineWave.WaveFrequency != 0){
 			  if ((HAL_GetTick() - StepChangeTime ) >= (1000.0/(SineWave.WaveFrequency*6))){
-				  if(State<6){ State++; }
-				  else { State=1; }
+				  if (Direction==0){
+					  if(Step<6){ Step++; }
+					  else { Step=1; }
+				  }
+				  if (Direction==1){
+					  if(Step>1){ Step--; }
+					  else { Step=6; }
+				  }
+
 				  UpdateState=1;
 				  StepChangeTime= HAL_GetTick();
 			  }
 		  }
 		  if(SineWave.WaveFrequency >=MIN_FREQUENCY && SineWave.WaveFrequency <= MAX_FREQUENCY && UpdateState==1){
-			  switch (State){
+			  switch (Step){
 				  case 1:
 					  HAL_GPIO_WritePin(U_Lo_GPIO_Port, U_Lo_Pin, GPIO_PIN_RESET);
 					  SineWave.PhaseA_t=1;
@@ -241,10 +270,16 @@ int main(void)
 		  HAL_GPIO_WritePin(V_Lo_GPIO_Port, V_Lo_Pin, GPIO_PIN_RESET);
 		  HAL_GPIO_WritePin(W_Lo_GPIO_Port, W_Lo_Pin, GPIO_PIN_RESET);
 	  }
-
-	  TIM4->CCR1=SineWave.PhaseA;
-	  TIM4->CCR2=SineWave.PhaseB;
-	  TIM4->CCR3=SineWave.PhaseC;
+	  int phA,phB,phC;
+	  if (SineWave.PhaseA>0) phA=1001;
+	  else phA=0;
+	  if (SineWave.PhaseB>0) phB=1001;
+	  else phB=0;
+	  if (SineWave.PhaseC>0) phC=1001;
+	  else phC=0;
+	  TIM4->CCR1=phA;//SineWave.PhaseA;
+	  TIM4->CCR2=phB;//SineWave.PhaseB;
+	  TIM4->CCR3=phC;//SineWave.PhaseC;
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -436,7 +471,7 @@ static void MX_TIM4_Init(void)
   htim4.Instance = TIM4;
   htim4.Init.Prescaler = 10-1;
   htim4.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim4.Init.Period = 1000;
+  htim4.Init.Period = 1000-1;
   htim4.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim4.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim4) != HAL_OK)
