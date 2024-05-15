@@ -24,6 +24,7 @@
 #include <stdio.h>
 #include <math.h>
 #include "Sbus.h"
+#include "Encoder.h"
 #include "SineWave.h"
 /* USER CODE END Includes */
 
@@ -62,17 +63,15 @@ uint32_t ScreenUpdateTime=0;
 int Step=1;
 StateMachine State=Off;
 StateMachine PreviousState=Forward;
-int32_t EncoderValue=0;
+encoder_data Encoder;
 int32_t EncoderMeasureTime=0;
-int32_t PreviousEncoderValue=0;
-double ActualSpeed=0;
 int Enable=0;
 int ToggleState=0;
 int UpdateState = 0;
 uint32_t  RequestedFrequency = 30;
 int Direction=0;
 ST_SineWave SineWave;
-int HundredMicroSecond;
+int FiftyMicroSecond;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -85,14 +84,18 @@ static void MX_USART6_UART_Init(void);
 static void MX_TIM4_Init(void);
 static void MX_TIM10_Init(void);
 /* USER CODE BEGIN PFP */
-void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim){
-	if (htim->Instance == TIM3){
-		EncoderValue = __HAL_TIM_GET_COUNTER(htim);
-	}
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+  if (GPIO_Pin==Encoder_chA_Pin || GPIO_Pin==Encoder_chB_Pin)	Encoder.InputGrayCode = (GPIOC->IDR & 0x0001) | (GPIOC->IDR & 0x0002);
 }
+//void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim){
+//	if (htim->Instance == TIM2){
+//		EncoderValue = __HAL_TIM_GET_COUNTER(htim);
+//	}
+//}
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 	if (htim->Instance == TIM10){
-		HundredMicroSecond=1;
+		FiftyMicroSecond=1;
 	}
 }
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
@@ -118,7 +121,8 @@ int main(void)
 
   /* USER CODE END 1 */
 
-  /* MCU Configuration--------------------------------------------------------*/
+  /* M0CU Configuration--------------------------------------------------------*/
+
 
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
   HAL_Init();
@@ -169,11 +173,12 @@ int main(void)
 	  //read every 10ms so *100*60 to be per minute
 	  //1024*4 pulse / revolution on encoder
 	  //Pully ratio 20:50
-	  if ((HAL_GetTick()-EncoderMeasureTime)>=10 ){
-			  ActualSpeed=(EncoderValue-PreviousEncoderValue)*((60*100)*20)/(1024*4*50);
-			  PreviousEncoderValue=EncoderValue;
-			  EncoderMeasureTime= HAL_GetTick();
-	  }
+	  GetEncoderValue(&Encoder);
+//	  if ((HAL_GetTick()-EncoderMeasureTime)>=10 ){
+//			  Encoder.SpeedRPM=(Encoder.EncoderValue-Encoder.PreviousEncoderValue)*((60*100)*20)/(1024*4*50);
+//			  Encoder.PreviousEncoderValue=Encoder.EncoderValue;
+//			  EncoderMeasureTime= HAL_GetTick();
+//	  }
 	  //enable/disable by push button
 	  if(HAL_GPIO_ReadPin(B1_GPIO_Port, B1_Pin)) ToggleState=1;
 	  while (!HAL_GPIO_ReadPin(B1_GPIO_Port, B1_Pin) && ToggleState){
@@ -199,7 +204,7 @@ int main(void)
 
 	  if(Enable){
 		  //Generating Sinusoidal PWM
-		  GenerateSine(&SineWave, &HundredMicroSecond);
+		  GenerateSine(&SineWave, &FiftyMicroSecond);
 		  //Ramp Frequency
 		  if ((RequestedFrequency > SineWave.WaveFrequency) && ((HAL_GetTick()-FrequencyChangeTime)>=100 )){
 			  SineWave.WaveFrequency++;
@@ -622,6 +627,12 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(B1_GPIO_Port, &GPIO_InitStruct);
 
+  /*Configure GPIO pins : Encoder_chA_Pin Encoder_chB_Pin */
+  GPIO_InitStruct.Pin = Encoder_chA_Pin|Encoder_chB_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING_FALLING;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
   /*Configure GPIO pin : LD2_Pin */
   GPIO_InitStruct.Pin = LD2_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
@@ -635,6 +646,13 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
+  /* EXTI interrupt init*/
+  HAL_NVIC_SetPriority(EXTI0_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI0_IRQn);
+
+  HAL_NVIC_SetPriority(EXTI1_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI1_IRQn);
 
 /* USER CODE BEGIN MX_GPIO_Init_2 */
 /* USER CODE END MX_GPIO_Init_2 */
