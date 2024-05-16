@@ -22,7 +22,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <stdio.h>
-#include <math.h>
+#include <arm_math.h>
 #include "Sbus.h"
 #include "Encoder.h"
 #include "SineWave.h"
@@ -68,7 +68,7 @@ int32_t EncoderMeasureTime=0;
 int Enable=0;
 int ToggleState=0;
 int UpdateState = 0;
-uint32_t  RequestedFrequency = 30;
+uint32_t  RequestedFrequency = 60;
 int Direction=0;
 ST_SineWave SineWave;
 int FiftyMicroSecond;
@@ -162,23 +162,24 @@ int main(void)
   /* USER CODE BEGIN WHILE */
 
   SineWave.WaveFrequency=MIN_FREQUENCY;
-  SineWave.VoltageAmplitude= 1000;
+
 
   Step = 1;
 
   while (1)
   {
-
+	  //V/F for 208V 60Hz motor under test:
+	  SineWave.VoltageAmplitude= trunc( (SineWave.WaveFrequency*208.0/60.0) * (1000.0/60.0));
 	  //Calculate RPM
 	  //read every 10ms so *100*60 to be per minute
 	  //1024*4 pulse / revolution on encoder
 	  //Pully ratio 20:50
 	  GetEncoderValue(&Encoder);
-//	  if ((HAL_GetTick()-EncoderMeasureTime)>=10 ){
-//			  Encoder.SpeedRPM=(Encoder.EncoderValue-Encoder.PreviousEncoderValue)*((60*100)*20)/(1024*4*50);
-//			  Encoder.PreviousEncoderValue=Encoder.EncoderValue;
-//			  EncoderMeasureTime= HAL_GetTick();
-//	  }
+	  if ((HAL_GetTick()-EncoderMeasureTime)>=10 ){
+			  Encoder.SpeedRPM=(Encoder.EncoderValue-Encoder.PreviousEncoderValue)*((60*100)*20)/(1024*4*50);
+			  Encoder.PreviousEncoderValue=Encoder.EncoderValue;
+			  EncoderMeasureTime= HAL_GetTick();
+	  }
 	  //enable/disable by push button
 	  if(HAL_GPIO_ReadPin(B1_GPIO_Port, B1_Pin)) ToggleState=1;
 	  while (!HAL_GPIO_ReadPin(B1_GPIO_Port, B1_Pin) && ToggleState){
@@ -206,7 +207,7 @@ int main(void)
 		  //Generating Sinusoidal PWM
 		  GenerateSine(&SineWave, &FiftyMicroSecond);
 		  //Ramp Frequency
-		  if ((RequestedFrequency > SineWave.WaveFrequency) && ((HAL_GetTick()-FrequencyChangeTime)>=100 )){
+		  if ((RequestedFrequency > SineWave.WaveFrequency) && ((HAL_GetTick()-FrequencyChangeTime)>=300 )){
 			  SineWave.WaveFrequency++;
 			  FrequencyChangeTime= HAL_GetTick();
 		  }
