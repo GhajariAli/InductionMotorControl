@@ -71,7 +71,7 @@ Check [This](https://github.com/GhajariAli/DCMotorControl) Repo for DC motor Con
 
 <details>
 <summary> SPWM speed Control </summary>
-  Here is the low and high side signals
+  Here is the low and high side signals with only Hi side SPWM:
 
   ![image](https://github.com/GhajariAli/InductionMotorControl/assets/124516346/4c915218-dd75-4448-a4c3-bddfdc7c2a15)
 
@@ -80,5 +80,33 @@ Check [This](https://github.com/GhajariAli/DCMotorControl) Repo for DC motor Con
   
   ![image](https://github.com/GhajariAli/InductionMotorControl/assets/124516346/6f450de8-868a-4954-a6fa-8d99349a4dc9)
 
-this made the motor run smoother, current is now lower and it makes less noise.
+  this made the motor run smoother, current is now lower and it makes less noise.
+  
+  This was great but the curent of the motor was not sinusoidal at all.
+
+  Terrible waveform:
+
+  ![image](https://github.com/GhajariAli/InductionMotorControl/assets/124516346/49cb9336-0ca4-43d3-95ef-016dc58e250c)
+
+  
+  the reason is behind this picture
+  
+  ![image](https://github.com/GhajariAli/InductionMotorControl/assets/124516346/a32e8d4d-7048-45a7-ada4-33ef95402a59)
+  
+  so the high and low are not equal value. So it's required to add low side SPWM as well
+  Here is the gate signals with all SPWM
+  
+  ![image](https://github.com/GhajariAli/InductionMotorControl/assets/124516346/34480751-5da3-418a-ab56-f4fc3cccf62f)
+  
+  A Closer look
+  
+  ![image](https://github.com/GhajariAli/InductionMotorControl/assets/124516346/db0b6d2d-1c9f-4010-a593-8c8b6dd545a9)
+  
+  Now motor current is much more close to sinusoidal current
+  
+  ![image](https://github.com/GhajariAli/InductionMotorControl/assets/124516346/6fe1b854-5e3d-449c-a39a-18fb12fc57a5)
+
+
+
+
 </details>
