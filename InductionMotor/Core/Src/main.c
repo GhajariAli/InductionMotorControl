@@ -22,17 +22,23 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <stdio.h>
+#include <arm_math.h>
 #include "Sbus.h"
+#include "Encoder.h"
+#include "SineWave.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
-
+typedef enum{
+	Off=0,
+	Forward=1,
+	Reverse=2
+}StateMachine;
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -41,9 +47,9 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
-TIM_HandleTypeDef htim2;
 TIM_HandleTypeDef htim3;
 TIM_HandleTypeDef htim4;
+TIM_HandleTypeDef htim10;
 
 UART_HandleTypeDef huart2;
 UART_HandleTypeDef huart6;
@@ -54,13 +60,18 @@ tsbus receivedSBUS;
 uint32_t StepChangeTime=0;
 uint32_t FrequencyChangeTime=0;
 uint32_t ScreenUpdateTime=0;
-int State=1;
-int32_t EncoderValue=0;
+int Step=1;
+StateMachine State=Off;
+StateMachine PreviousState=Forward;
+encoder_data Encoder;
 int32_t EncoderMeasureTime=0;
-int32_t PreviousEncoderValue=0;
-double ActualSpeed=0;
 int Enable=0;
-int ToggleEnable=0;
+int ToggleState=0;
+int UpdateState = 0;
+uint32_t  RequestedFrequency = 60;
+int Direction=0;
+ST_SineWave SineWave;
+int FiftyMicroSecond;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -68,14 +79,23 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_DMA_Init(void);
 static void MX_USART2_UART_Init(void);
-static void MX_TIM2_Init(void);
 static void MX_TIM3_Init(void);
 static void MX_USART6_UART_Init(void);
 static void MX_TIM4_Init(void);
+static void MX_TIM10_Init(void);
 /* USER CODE BEGIN PFP */
-void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim){
-	if (htim == &htim3){
-		EncoderValue = __HAL_TIM_GET_COUNTER(htim);
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+  if (GPIO_Pin==Encoder_chA_Pin || GPIO_Pin==Encoder_chB_Pin)	Encoder.InputGrayCode = (GPIOC->IDR & 0x0001) | (GPIOC->IDR & 0x0002);
+}
+//void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim){
+//	if (htim->Instance == TIM2){
+//		EncoderValue = __HAL_TIM_GET_COUNTER(htim);
+//	}
+//}
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
+	if (htim->Instance == TIM10){
+		FiftyMicroSecond=1;
 	}
 }
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
@@ -96,11 +116,13 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
   */
 int main(void)
 {
+
   /* USER CODE BEGIN 1 */
 
   /* USER CODE END 1 */
 
-  /* MCU Configuration--------------------------------------------------------*/
+  /* M0CU Configuration--------------------------------------------------------*/
+
 
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
   HAL_Init();
@@ -120,125 +142,163 @@ int main(void)
   MX_GPIO_Init();
   MX_DMA_Init();
   MX_USART2_UART_Init();
-  MX_TIM2_Init();
   MX_TIM3_Init();
   MX_USART6_UART_Init();
   MX_TIM4_Init();
+  MX_TIM10_Init();
   /* USER CODE BEGIN 2 */
   HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_1);
   HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_2);
   HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_3);
+  HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
+  HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_2);
+  HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_3);
   HAL_TIM_Encoder_Start_IT(&htim3,TIM_CHANNEL_ALL);
-
+  HAL_TIM_Base_Start_IT(&htim10);
   HAL_UART_Receive_DMA(&huart6, &receivedSBUS.ReceivedData[0], SBUS_LEN);
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  uint32_t 	Voltage=700;
-  uint32_t 	Frequency=10;
-  uint32_t 	RequestedFrequency=30;
-  State=1;
+
+  SineWave.WaveFrequency=MIN_FREQUENCY;
+
+
+  Step = 1;
 
   while (1)
   {
-	  if(HAL_GPIO_ReadPin(B1_GPIO_Port, B1_Pin)) ToggleEnable=1;
-	  while (!HAL_GPIO_ReadPin(B1_GPIO_Port, B1_Pin) && ToggleEnable){
-		  if (Enable) Enable=0;
-		  else Enable=1;
-		  ToggleEnable=0;
+	  //V/F for 208V 60Hz motor under test:
+	  SineWave.VoltageAmplitude= trunc( (SineWave.WaveFrequency*208.0/60.0) * (1000.0/60.0));
+	  //Calculate RPM
+	  //read every 10ms so *100*60 to be per minute
+	  //1024*4 pulse / revolution on encoder
+	  //Pully ratio 20:50
+	  GetEncoderValue(&Encoder);
+	  if ((HAL_GetTick()-EncoderMeasureTime)>=10 ){
+			  Encoder.SpeedRPM=(Encoder.EncoderValue-Encoder.PreviousEncoderValue)*((60*100)*20)/(1024*4*50);
+			  Encoder.PreviousEncoderValue=Encoder.EncoderValue;
+			  EncoderMeasureTime= HAL_GetTick();
 	  }
+	  //enable/disable by push button
+	  if(HAL_GPIO_ReadPin(B1_GPIO_Port, B1_Pin)) ToggleState=1;
+	  while (!HAL_GPIO_ReadPin(B1_GPIO_Port, B1_Pin) && ToggleState){
+		  if (State==Forward || State==Reverse) State=Off;
+		  else if (State==Off && PreviousState==Reverse) State=PreviousState=Forward;
+		  else if (State==Off && PreviousState==Forward) State=PreviousState=Reverse;
+		  ToggleState=0;
+	  }
+	  //State Machine
+	  switch(State){
+	  	  case	Off:
+	  		  Enable=0;
+	  		  break;
+	  	  case Forward:
+	  		  Enable=1;
+	  		  Direction=1;
+	  		  break;
+	  	  case Reverse:
+	  		  Enable=1;
+	  		  Direction=0;
+	  		  break;
+	  }
+
 	  if(Enable){
-		  //Calculate RPM
-		  //read every 10ms so *100*60 to be per minute
-		  //1024*4 pulse / revolution on encoder
-		  //Pully ratio 20:50
-		  if ((HAL_GetTick()-EncoderMeasureTime)>=10 ){
-				  ActualSpeed=(EncoderValue-PreviousEncoderValue)*((60*100)*20)/(1024*4*50);
-				  PreviousEncoderValue=EncoderValue;
-				  EncoderMeasureTime= HAL_GetTick();
-		  }
+		  //Generating Sinusoidal PWM
+		  GenerateSine(&SineWave, &FiftyMicroSecond);
 		  //Ramp Frequency
-		  if ((RequestedFrequency > Frequency) && ((HAL_GetTick()-FrequencyChangeTime)>=100 )){
-			  Frequency++;
+		  if ((RequestedFrequency > SineWave.WaveFrequency) && ((HAL_GetTick()-FrequencyChangeTime)>=300 )){
+			  SineWave.WaveFrequency++;
 			  FrequencyChangeTime= HAL_GetTick();
 		  }
 		  //Change State
-		  if (Frequency != 0){
-			  if ((HAL_GetTick() - StepChangeTime ) >= (1000/(Frequency*6))){
-				  if(State<6){ State++; }
-				  else { State=1; }
+		  if (SineWave.WaveFrequency != 0){
+			  if ((HAL_GetTick() - StepChangeTime ) >= (1000.0/(SineWave.WaveFrequency*6))){
+				  if (Direction==0){
+					  if(Step<6){ Step++; }
+					  else { Step=1; }
+				  }
+				  if (Direction==1){
+					  if(Step>1){ Step--; }
+					  else { Step=6; }
+				  }
+
+				  UpdateState=1;
 				  StepChangeTime= HAL_GetTick();
 			  }
 		  }
-		  if(Frequency>5){
-			  switch (State){
-			  case 1:
-				  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2,0);
-				  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3,0);
-				  HAL_GPIO_WritePin(U_Lo_GPIO_Port, U_Lo_Pin, GPIO_PIN_RESET);
-				  HAL_GPIO_WritePin(W_Lo_GPIO_Port, W_Lo_Pin, GPIO_PIN_RESET);
-				  //1+4
-				  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1,Voltage);
-				  HAL_GPIO_WritePin(V_Lo_GPIO_Port, V_Lo_Pin, GPIO_PIN_SET);
-				  break;
-			  case 2:
-				  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2,0);
-				  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3,0);
-				  HAL_GPIO_WritePin(U_Lo_GPIO_Port, U_Lo_Pin, GPIO_PIN_RESET);
-				  HAL_GPIO_WritePin(V_Lo_GPIO_Port, V_Lo_Pin, GPIO_PIN_RESET);
-				  //1+6
-				  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1,Voltage);
-				  HAL_GPIO_WritePin(W_Lo_GPIO_Port, W_Lo_Pin, GPIO_PIN_SET);
-				  break;
-			  case 3:
-				  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1,0);
-				  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3,0);
-				  HAL_GPIO_WritePin(U_Lo_GPIO_Port, U_Lo_Pin, GPIO_PIN_RESET);
-				  HAL_GPIO_WritePin(V_Lo_GPIO_Port, V_Lo_Pin, GPIO_PIN_RESET);
-				  //3+6
-				  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2,Voltage);
-				  HAL_GPIO_WritePin(W_Lo_GPIO_Port, W_Lo_Pin, GPIO_PIN_SET);
-				  break;
-			  case 4:
-				  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1,0);
-				  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3,0);
-				  HAL_GPIO_WritePin(W_Lo_GPIO_Port, W_Lo_Pin, GPIO_PIN_RESET);
-				  HAL_GPIO_WritePin(V_Lo_GPIO_Port, V_Lo_Pin, GPIO_PIN_RESET);
-				  //3+2
-				  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2,Voltage);
-				  HAL_GPIO_WritePin(U_Lo_GPIO_Port, U_Lo_Pin, GPIO_PIN_SET);
-				  break;
-			  case 5:
-				  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2,0);
-				  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1,0);
-				  HAL_GPIO_WritePin(W_Lo_GPIO_Port, W_Lo_Pin, GPIO_PIN_RESET);
-				  HAL_GPIO_WritePin(V_Lo_GPIO_Port, V_Lo_Pin, GPIO_PIN_RESET);
-				  //5+2
-				  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3,Voltage);
-				  HAL_GPIO_WritePin(U_Lo_GPIO_Port, U_Lo_Pin, GPIO_PIN_SET);
-				  break;
-			  case 6:
-				  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2,0);
-				  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1,0);
-				  HAL_GPIO_WritePin(W_Lo_GPIO_Port, W_Lo_Pin, GPIO_PIN_RESET);
-				  HAL_GPIO_WritePin(U_Lo_GPIO_Port, U_Lo_Pin, GPIO_PIN_RESET);
-				  //4+5
-				  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3,Voltage);
-				  HAL_GPIO_WritePin(V_Lo_GPIO_Port, V_Lo_Pin, GPIO_PIN_SET);
-				  break;
-			  }
+		  if(SineWave.WaveFrequency >=MIN_FREQUENCY && SineWave.WaveFrequency <= MAX_FREQUENCY && UpdateState==1){
+			  switch (Step){
+				  case 1:
+					  HAL_GPIO_WritePin(U_Lo_GPIO_Port, U_Lo_Pin, GPIO_PIN_RESET);
+					  SineWave.PhaseA_t=1;
+					  SineWave.PhaseAN_t=0;
+					  UpdateState=0;
+					  break;
+				  case 2:
+					  SineWave.PhaseC_t=0;
+					  SineWave.PhaseCN_t=1;
+					  HAL_GPIO_WritePin(W_Lo_GPIO_Port, W_Lo_Pin, GPIO_PIN_SET);
+					  UpdateState=0;
+					  break;
+				  case 3:
+					  HAL_GPIO_WritePin(V_Lo_GPIO_Port, V_Lo_Pin, GPIO_PIN_RESET);
+					  SineWave.PhaseB_t=1;
+					  SineWave.PhaseBN_t=0;
+					  UpdateState=0;
+					  break;
+				  case 4:
+					  SineWave.PhaseA_t=0;
+					  SineWave.PhaseAN_t=1;
+					  HAL_GPIO_WritePin(U_Lo_GPIO_Port, U_Lo_Pin, GPIO_PIN_SET);
+					  UpdateState=0;
+					  break;
+				  case 5:
+					  HAL_GPIO_WritePin(W_Lo_GPIO_Port, W_Lo_Pin, GPIO_PIN_RESET);
+					  SineWave.PhaseC_t=1;
+					  SineWave.PhaseCN_t=0;
+					  UpdateState=0;
+					  break;
+				  case 6:
+					  SineWave.PhaseB_t=0;
+					  SineWave.PhaseBN_t=1;
+					  HAL_GPIO_WritePin(V_Lo_GPIO_Port, V_Lo_Pin, GPIO_PIN_SET);
+					  UpdateState=0;
+					  break;
+				  }
 		  }
 	  }
-	  else{
-		  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1,0);
-		  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_2,0);
-		  __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_3,0);
+	  else {
+		  SineWave.PhaseA_t=0;
+		  SineWave.PhaseB_t=0;
+		  SineWave.PhaseC_t=0;
+		  SineWave.PhaseAN_t=0;
+		  SineWave.PhaseBN_t=0;
+		  SineWave.PhaseCN_t=0;
+		  SineWave.PhaseA=0;
+		  SineWave.PhaseB=0;
+		  SineWave.PhaseC=0;
+		  SineWave.PhaseAN=0;
+		  SineWave.PhaseBN=0;
+		  SineWave.PhaseCN=0;
+		  SineWave.WaveFrequency=MIN_FREQUENCY;
 		  HAL_GPIO_WritePin(U_Lo_GPIO_Port, U_Lo_Pin, GPIO_PIN_RESET);
 		  HAL_GPIO_WritePin(V_Lo_GPIO_Port, V_Lo_Pin, GPIO_PIN_RESET);
 		  HAL_GPIO_WritePin(W_Lo_GPIO_Port, W_Lo_Pin, GPIO_PIN_RESET);
 	  }
-
+//	  int phA,phB,phC;
+//	  if (SineWave.PhaseA>0) phA=1001;
+//	  else phA=0;
+//	  if (SineWave.PhaseB>0) phB=1001;
+//	  else phB=0;
+//	  if (SineWave.PhaseC>0) phC=1001;
+//	  else phC=0;
+	  TIM4->CCR1=SineWave.PhaseA;
+	  TIM4->CCR2=SineWave.PhaseB;
+	  TIM4->CCR3=SineWave.PhaseC;
+	  TIM3->CCR1=SineWave.PhaseAN;
+	  TIM3->CCR2=SineWave.PhaseBN;
+	  TIM3->CCR3=SineWave.PhaseCN;
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -293,73 +353,6 @@ void SystemClock_Config(void)
 }
 
 /**
-  * @brief TIM2 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_TIM2_Init(void)
-{
-
-  /* USER CODE BEGIN TIM2_Init 0 */
-
-  /* USER CODE END TIM2_Init 0 */
-
-  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
-  TIM_MasterConfigTypeDef sMasterConfig = {0};
-  TIM_OC_InitTypeDef sConfigOC = {0};
-
-  /* USER CODE BEGIN TIM2_Init 1 */
-
-  /* USER CODE END TIM2_Init 1 */
-  htim2.Instance = TIM2;
-  htim2.Init.Prescaler = 5-1;
-  htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim2.Init.Period = 1000;
-  htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-  htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-  if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
-  if (HAL_TIM_ConfigClockSource(&htim2, &sClockSourceConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  if (HAL_TIM_PWM_Init(&htim2) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
-  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
-  if (HAL_TIMEx_MasterConfigSynchronization(&htim2, &sMasterConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sConfigOC.OCMode = TIM_OCMODE_PWM1;
-  sConfigOC.Pulse = 0;
-  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
-  sConfigOC.OCFastMode = TIM_OCFAST_ENABLE;
-  if (HAL_TIM_PWM_ConfigChannel(&htim2, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  if (HAL_TIM_PWM_ConfigChannel(&htim2, &sConfigOC, TIM_CHANNEL_2) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  if (HAL_TIM_PWM_ConfigChannel(&htim2, &sConfigOC, TIM_CHANNEL_3) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN TIM2_Init 2 */
-
-  /* USER CODE END TIM2_Init 2 */
-  HAL_TIM_MspPostInit(&htim2);
-
-}
-
-/**
   * @brief TIM3 Initialization Function
   * @param None
   * @retval None
@@ -371,28 +364,29 @@ static void MX_TIM3_Init(void)
 
   /* USER CODE END TIM3_Init 0 */
 
-  TIM_Encoder_InitTypeDef sConfig = {0};
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
   TIM_MasterConfigTypeDef sMasterConfig = {0};
+  TIM_OC_InitTypeDef sConfigOC = {0};
 
   /* USER CODE BEGIN TIM3_Init 1 */
 
   /* USER CODE END TIM3_Init 1 */
   htim3.Instance = TIM3;
-  htim3.Init.Prescaler = 0;
+  htim3.Init.Prescaler = 5-1;
   htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim3.Init.Period = 65535;
+  htim3.Init.Period = 1000-1;
   htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-  sConfig.EncoderMode = TIM_ENCODERMODE_TI12;
-  sConfig.IC1Polarity = TIM_ICPOLARITY_RISING;
-  sConfig.IC1Selection = TIM_ICSELECTION_DIRECTTI;
-  sConfig.IC1Prescaler = TIM_ICPSC_DIV1;
-  sConfig.IC1Filter = 0;
-  sConfig.IC2Polarity = TIM_ICPOLARITY_RISING;
-  sConfig.IC2Selection = TIM_ICSELECTION_DIRECTTI;
-  sConfig.IC2Prescaler = TIM_ICPSC_DIV1;
-  sConfig.IC2Filter = 0;
-  if (HAL_TIM_Encoder_Init(&htim3, &sConfig) != HAL_OK)
+  if (HAL_TIM_Base_Init(&htim3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim3, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_TIM_PWM_Init(&htim3) != HAL_OK)
   {
     Error_Handler();
   }
@@ -402,9 +396,26 @@ static void MX_TIM3_Init(void)
   {
     Error_Handler();
   }
+  sConfigOC.OCMode = TIM_OCMODE_PWM1;
+  sConfigOC.Pulse = 0;
+  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
+  sConfigOC.OCFastMode = TIM_OCFAST_ENABLE;
+  if (HAL_TIM_PWM_ConfigChannel(&htim3, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_TIM_PWM_ConfigChannel(&htim3, &sConfigOC, TIM_CHANNEL_2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_TIM_PWM_ConfigChannel(&htim3, &sConfigOC, TIM_CHANNEL_3) != HAL_OK)
+  {
+    Error_Handler();
+  }
   /* USER CODE BEGIN TIM3_Init 2 */
 
   /* USER CODE END TIM3_Init 2 */
+  HAL_TIM_MspPostInit(&htim3);
 
 }
 
@@ -428,9 +439,9 @@ static void MX_TIM4_Init(void)
 
   /* USER CODE END TIM4_Init 1 */
   htim4.Instance = TIM4;
-  htim4.Init.Prescaler = 10-1;
+  htim4.Init.Prescaler = 5-1;
   htim4.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim4.Init.Period = 1000;
+  htim4.Init.Period = 1000-1;
   htim4.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim4.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim4) != HAL_OK)
@@ -472,6 +483,37 @@ static void MX_TIM4_Init(void)
 
   /* USER CODE END TIM4_Init 2 */
   HAL_TIM_MspPostInit(&htim4);
+
+}
+
+/**
+  * @brief TIM10 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM10_Init(void)
+{
+
+  /* USER CODE BEGIN TIM10_Init 0 */
+
+  /* USER CODE END TIM10_Init 0 */
+
+  /* USER CODE BEGIN TIM10_Init 1 */
+
+  /* USER CODE END TIM10_Init 1 */
+  htim10.Instance = TIM10;
+  htim10.Init.Prescaler = 0;
+  htim10.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim10.Init.Period = 20000-1;
+  htim10.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim10.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
+  if (HAL_TIM_Base_Init(&htim10) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM10_Init 2 */
+
+  /* USER CODE END TIM10_Init 2 */
 
 }
 
@@ -578,13 +620,19 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOC, U_Lo_Pin|V_Lo_Pin|W_Lo_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOC, V_Lo_Pin|U_Lo_Pin|W_Lo_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin : B1_Pin */
   GPIO_InitStruct.Pin = B1_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(B1_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : Encoder_chA_Pin Encoder_chB_Pin */
+  GPIO_InitStruct.Pin = Encoder_chA_Pin|Encoder_chB_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING_FALLING;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
   /*Configure GPIO pin : LD2_Pin */
   GPIO_InitStruct.Pin = LD2_Pin;
@@ -593,12 +641,19 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(LD2_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : U_Lo_Pin V_Lo_Pin W_Lo_Pin */
-  GPIO_InitStruct.Pin = U_Lo_Pin|V_Lo_Pin|W_Lo_Pin;
+  /*Configure GPIO pins : V_Lo_Pin U_Lo_Pin W_Lo_Pin */
+  GPIO_InitStruct.Pin = V_Lo_Pin|U_Lo_Pin|W_Lo_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
+  /* EXTI interrupt init*/
+  HAL_NVIC_SetPriority(EXTI0_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI0_IRQn);
+
+  HAL_NVIC_SetPriority(EXTI1_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI1_IRQn);
 
 /* USER CODE BEGIN MX_GPIO_Init_2 */
 /* USER CODE END MX_GPIO_Init_2 */
