@@ -68,7 +68,7 @@ int32_t EncoderMeasureTime=0;
 int Enable=0;
 int ToggleState=0;
 int UpdateState = 0;
-uint32_t  RequestedFrequency = 60;
+uint32_t  RequestedFrequency = 10;
 int Direction=0;
 ST_SineWave SineWave;
 int FiftyMicroSecond;
@@ -121,8 +121,7 @@ int main(void)
 
   /* USER CODE END 1 */
 
-  /* M0CU Configuration--------------------------------------------------------*/
-
+  /* MCU Configuration--------------------------------------------------------*/
 
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
   HAL_Init();
@@ -169,7 +168,7 @@ int main(void)
   while (1)
   {
 	  //V/F for 208V 60Hz motor under test:
-	  SineWave.VoltageAmplitude= trunc( (SineWave.WaveFrequency*208.0/60.0) * (1000.0/60.0));
+	  SineWave.VoltageAmplitude= 800;//trunc( (SineWave.WaveFrequency*208.0/60.0) * (1000.0/60.0));
 	  //Calculate RPM
 	  //read every 10ms so *100*60 to be per minute
 	  //1024*4 pulse / revolution on encoder

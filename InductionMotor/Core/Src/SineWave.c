@@ -1,7 +1,7 @@
 #include "SineWave.h"
 
-void GenerateSine(ST_SineWave* SineWave, int* FiftyMicroSecond){
-	if (!*FiftyMicroSecond){
+void GenerateSine(ST_SineWave* SineWave, int* MicroSecond50){
+	if (!*MicroSecond50){
 		return;
 	}
 	if (SineWave->PhaseA_t){
@@ -34,6 +34,6 @@ void GenerateSine(ST_SineWave* SineWave, int* FiftyMicroSecond){
 		if (SineWave->PhaseCN_t<5000.0) SineWave->PhaseCN_t++;
 	}
 	else SineWave->PhaseCN=0;
-	*FiftyMicroSecond=0;
+	*MicroSecond50=0;
 	return;
 }
