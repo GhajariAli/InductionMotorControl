@@ -68,7 +68,7 @@ int32_t EncoderMeasureTime=0;
 int Enable=0;
 int ToggleState=0;
 int UpdateState = 0;
-uint32_t  RequestedFrequency = 10;
+uint32_t  RequestedFrequency = 5;
 int Direction=0;
 ST_SineWave SineWave;
 int FiftyMicroSecond;
@@ -161,14 +161,14 @@ int main(void)
   /* USER CODE BEGIN WHILE */
 
   SineWave.WaveFrequency=MIN_FREQUENCY;
-
+  SineWave.VoltageAmplitude= 1000;
 
   Step = 1;
 
   while (1)
   {
 	  //V/F for 208V 60Hz motor under test:
-	  SineWave.VoltageAmplitude= 800;//trunc( (SineWave.WaveFrequency*208.0/60.0) * (1000.0/60.0));
+	  //SineWave.VoltageAmplitude= trunc( (SineWave.WaveFrequency*208.0/60.0) * (1000.0/60.0));
 	  //Calculate RPM
 	  //read every 10ms so *100*60 to be per minute
 	  //1024*4 pulse / revolution on encoder
@@ -212,7 +212,7 @@ int main(void)
 		  }
 		  //Change State
 		  if (SineWave.WaveFrequency != 0){
-			  if ((HAL_GetTick() - StepChangeTime ) >= (1000.0/(SineWave.WaveFrequency*6))){
+			  if ((HAL_GetTick() - StepChangeTime ) >= trunc(1000.0/(SineWave.WaveFrequency*6))){
 				  if (Direction==0){
 					  if(Step<6){ Step++; }
 					  else { Step=1; }
@@ -229,7 +229,6 @@ int main(void)
 		  if(SineWave.WaveFrequency >=MIN_FREQUENCY && SineWave.WaveFrequency <= MAX_FREQUENCY && UpdateState==1){
 			  switch (Step){
 				  case 1:
-					  HAL_GPIO_WritePin(U_Lo_GPIO_Port, U_Lo_Pin, GPIO_PIN_RESET);
 					  SineWave.PhaseA_t=1;
 					  SineWave.PhaseAN_t=0;
 					  UpdateState=0;
@@ -237,11 +236,9 @@ int main(void)
 				  case 2:
 					  SineWave.PhaseC_t=0;
 					  SineWave.PhaseCN_t=1;
-					  HAL_GPIO_WritePin(W_Lo_GPIO_Port, W_Lo_Pin, GPIO_PIN_SET);
 					  UpdateState=0;
 					  break;
 				  case 3:
-					  HAL_GPIO_WritePin(V_Lo_GPIO_Port, V_Lo_Pin, GPIO_PIN_RESET);
 					  SineWave.PhaseB_t=1;
 					  SineWave.PhaseBN_t=0;
 					  UpdateState=0;
@@ -249,11 +246,9 @@ int main(void)
 				  case 4:
 					  SineWave.PhaseA_t=0;
 					  SineWave.PhaseAN_t=1;
-					  HAL_GPIO_WritePin(U_Lo_GPIO_Port, U_Lo_Pin, GPIO_PIN_SET);
 					  UpdateState=0;
 					  break;
 				  case 5:
-					  HAL_GPIO_WritePin(W_Lo_GPIO_Port, W_Lo_Pin, GPIO_PIN_RESET);
 					  SineWave.PhaseC_t=1;
 					  SineWave.PhaseCN_t=0;
 					  UpdateState=0;
@@ -261,7 +256,6 @@ int main(void)
 				  case 6:
 					  SineWave.PhaseB_t=0;
 					  SineWave.PhaseBN_t=1;
-					  HAL_GPIO_WritePin(V_Lo_GPIO_Port, V_Lo_Pin, GPIO_PIN_SET);
 					  UpdateState=0;
 					  break;
 				  }
