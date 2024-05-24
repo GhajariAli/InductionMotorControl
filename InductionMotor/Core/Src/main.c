@@ -161,14 +161,19 @@ int main(void)
   /* USER CODE BEGIN WHILE */
 
   SineWave.WaveFrequency=MIN_FREQUENCY;
-  SineWave.VoltageAmplitude= 1000;
+  RequestedFrequency = 17;
 
   Step = 1;
 
   while (1)
   {
 	  //V/F for 208V 60Hz motor under test:
-	  //SineWave.VoltageAmplitude= trunc( (SineWave.WaveFrequency*208.0/60.0) * (1000.0/60.0));
+
+	  double Voltage = SineWave.WaveFrequency * (208000/3600.0);
+	  if (Voltage <=1000 && Voltage >=700) SineWave.VoltageAmplitude= trunc(Voltage);
+	  else if (Voltage <=700 && Voltage >=0) SineWave.VoltageAmplitude= 700;
+	  else SineWave.VoltageAmplitude= 1000;
+	  SineWave.VoltageAmplitude= 1000;
 	  //Calculate RPM
 	  //read every 10ms so *100*60 to be per minute
 	  //1024*4 pulse / revolution on encoder
@@ -206,13 +211,13 @@ int main(void)
 		  //Generating Sinusoidal PWM
 		  GenerateSine(&SineWave, &FiftyMicroSecond);
 		  //Ramp Frequency
-		  if ((RequestedFrequency > SineWave.WaveFrequency) && ((HAL_GetTick()-FrequencyChangeTime)>=300 )){
+		  if ((RequestedFrequency > SineWave.WaveFrequency) && ((HAL_GetTick()-FrequencyChangeTime)>=50 )){
 			  SineWave.WaveFrequency++;
 			  FrequencyChangeTime= HAL_GetTick();
 		  }
 		  //Change State
 		  if (SineWave.WaveFrequency != 0){
-			  if ((HAL_GetTick() - StepChangeTime ) >= trunc(1000.0/(SineWave.WaveFrequency*6))){
+			  if ((HAL_GetTick() - StepChangeTime ) >= 1000.0/(SineWave.WaveFrequency*6)){
 				  if (Direction==0){
 					  if(Step<6){ Step++; }
 					  else { Step=1; }

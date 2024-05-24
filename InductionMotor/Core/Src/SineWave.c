@@ -3,7 +3,7 @@ void GenerateSine(ST_SineWave* SineWave, int* MicroSecond50){
 	if (!*MicroSecond50){
 		return;
 	}
-	uint32_t Value=0;
+	double Value=0;
 
 	if (SineWave->PhaseA_t){
 		Value= arm_sin_f32( (2*M_PI*SineWave->PhaseA_t*SineWave->WaveFrequency)/5000.0) 	* SineWave->VoltageAmplitude;
