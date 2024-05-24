@@ -101,6 +101,11 @@ Check [This](https://github.com/GhajariAli/DCMotorControl) Repo for DC motor Con
   A Closer look
   
   ![image](https://github.com/GhajariAli/InductionMotorControl/assets/124516346/db0b6d2d-1c9f-4010-a593-8c8b6dd545a9)
+
+  Here is how the SPWM signals on the High side look after passing through a Filter:
+  
+  ![image](https://github.com/GhajariAli/InductionMotorControl/assets/124516346/27b419d3-8280-424d-bd96-72d6e8db1adb)
+
   
   Now motor current is much more close to sinusoidal current
   
