@@ -3,7 +3,7 @@
 
 #define PWM_MAX_VALUE 1000
 
-#define MAX_FREQUENCY 60
+#define MAX_FREQUENCY 1000
 #define MIN_FREQUENCY 5
 
 typedef struct {

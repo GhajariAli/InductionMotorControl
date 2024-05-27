@@ -57,6 +57,7 @@ DMA_HandleTypeDef hdma_usart6_rx;
 
 /* USER CODE BEGIN PV */
 tsbus receivedSBUS;
+uint32_t PreviousStepChangeTime=0;
 uint32_t StepChangeTime=0;
 uint32_t FrequencyChangeTime=0;
 uint32_t ScreenUpdateTime=0;
@@ -69,7 +70,7 @@ int Enable=0;
 int ToggleState=0;
 int UpdateState = 0;
 uint32_t  RequestedFrequency = 5;
-int Direction=0;
+StateMachine Direction=0;
 ST_SineWave SineWave;
 int FiftyMicroSecond;
 /* USER CODE END PV */
@@ -96,6 +97,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 	if (htim->Instance == TIM10){
 		FiftyMicroSecond=1;
+		StepChangeTime++;
 	}
 }
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
@@ -161,7 +163,7 @@ int main(void)
   /* USER CODE BEGIN WHILE */
 
   SineWave.WaveFrequency=MIN_FREQUENCY;
-  RequestedFrequency = 17;
+  RequestedFrequency = 30;
 
   Step = 1;
 
@@ -199,11 +201,11 @@ int main(void)
 	  		  break;
 	  	  case Forward:
 	  		  Enable=1;
-	  		  Direction=1;
+	  		  Direction=Forward;
 	  		  break;
 	  	  case Reverse:
 	  		  Enable=1;
-	  		  Direction=0;
+	  		  Direction=Reverse;
 	  		  break;
 	  }
 
@@ -217,18 +219,19 @@ int main(void)
 		  }
 		  //Change State
 		  if (SineWave.WaveFrequency != 0){
-			  if ((HAL_GetTick() - StepChangeTime ) >= 1000.0/(SineWave.WaveFrequency*6)){
-				  if (Direction==0){
-					  if(Step<6){ Step++; }
-					  else { Step=1; }
+			  if ((StepChangeTime - PreviousStepChangeTime ) > trunc(20000.0/(SineWave.WaveFrequency*6))){
+				  if (Direction==Forward){
+					  if(Step<6) 	Step++;
+					  else  		Step=1;
 				  }
-				  if (Direction==1){
-					  if(Step>1){ Step--; }
-					  else { Step=6; }
+				  if (Direction==Reverse){
+					  if(Step>1) 	Step--;
+					  else  		Step=6;
 				  }
 
 				  UpdateState=1;
-				  StepChangeTime= HAL_GetTick();
+				  PreviousStepChangeTime= StepChangeTime;
+				  if (StepChangeTime>4000000000) PreviousStepChangeTime=StepChangeTime=0;
 			  }
 		  }
 		  if(SineWave.WaveFrequency >=MIN_FREQUENCY && SineWave.WaveFrequency <= MAX_FREQUENCY && UpdateState==1){
@@ -370,7 +373,7 @@ static void MX_TIM3_Init(void)
 
   /* USER CODE END TIM3_Init 1 */
   htim3.Instance = TIM3;
-  htim3.Init.Prescaler = 5-1;
+  htim3.Init.Prescaler = 10-1;
   htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
   htim3.Init.Period = 1000-1;
   htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
@@ -388,8 +391,8 @@ static void MX_TIM3_Init(void)
   {
     Error_Handler();
   }
-  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
-  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_UPDATE;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_ENABLE;
   if (HAL_TIMEx_MasterConfigSynchronization(&htim3, &sMasterConfig) != HAL_OK)
   {
     Error_Handler();
@@ -429,7 +432,7 @@ static void MX_TIM4_Init(void)
 
   /* USER CODE END TIM4_Init 0 */
 
-  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_SlaveConfigTypeDef sSlaveConfig = {0};
   TIM_MasterConfigTypeDef sMasterConfig = {0};
   TIM_OC_InitTypeDef sConfigOC = {0};
 
@@ -437,7 +440,7 @@ static void MX_TIM4_Init(void)
 
   /* USER CODE END TIM4_Init 1 */
   htim4.Instance = TIM4;
-  htim4.Init.Prescaler = 5-1;
+  htim4.Init.Prescaler = 10-1;
   htim4.Init.CounterMode = TIM_COUNTERMODE_UP;
   htim4.Init.Period = 1000-1;
   htim4.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
@@ -446,17 +449,18 @@ static void MX_TIM4_Init(void)
   {
     Error_Handler();
   }
-  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
-  if (HAL_TIM_ConfigClockSource(&htim4, &sClockSourceConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
   if (HAL_TIM_PWM_Init(&htim4) != HAL_OK)
   {
     Error_Handler();
   }
-  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
-  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  sSlaveConfig.SlaveMode = TIM_SLAVEMODE_TRIGGER;
+  sSlaveConfig.InputTrigger = TIM_TS_ITR2;
+  if (HAL_TIM_SlaveConfigSynchro(&htim4, &sSlaveConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_UPDATE;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_ENABLE;
   if (HAL_TIMEx_MasterConfigSynchronization(&htim4, &sMasterConfig) != HAL_OK)
   {
     Error_Handler();
@@ -502,7 +506,7 @@ static void MX_TIM10_Init(void)
   htim10.Instance = TIM10;
   htim10.Init.Prescaler = 0;
   htim10.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim10.Init.Period = 20000-1;
+  htim10.Init.Period = 5000-1;
   htim10.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim10.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
   if (HAL_TIM_Base_Init(&htim10) != HAL_OK)
