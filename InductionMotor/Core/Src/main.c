@@ -163,7 +163,7 @@ int main(void)
   /* USER CODE BEGIN WHILE */
 
   SineWave.WaveFrequency=MIN_FREQUENCY;
-  RequestedFrequency = 30;
+  RequestedFrequency = 60;
 
   Step = 1;
 
@@ -175,7 +175,7 @@ int main(void)
 	  if (Voltage <=1000 && Voltage >=700) SineWave.VoltageAmplitude= trunc(Voltage);
 	  else if (Voltage <=700 && Voltage >=0) SineWave.VoltageAmplitude= 700;
 	  else SineWave.VoltageAmplitude= 1000;
-	  SineWave.VoltageAmplitude= 1000;
+
 	  //Calculate RPM
 	  //read every 10ms so *100*60 to be per minute
 	  //1024*4 pulse / revolution on encoder
@@ -213,7 +213,7 @@ int main(void)
 		  //Generating Sinusoidal PWM
 		  GenerateSine(&SineWave, &FiftyMicroSecond);
 		  //Ramp Frequency
-		  if ((RequestedFrequency > SineWave.WaveFrequency) && ((HAL_GetTick()-FrequencyChangeTime)>=50 )){
+		  if ((RequestedFrequency > SineWave.WaveFrequency) && ((HAL_GetTick()-FrequencyChangeTime)>=500 )){
 			  SineWave.WaveFrequency++;
 			  FrequencyChangeTime= HAL_GetTick();
 		  }
@@ -270,30 +270,12 @@ int main(void)
 		  }
 	  }
 	  else {
-		  SineWave.PhaseA_t=0;
-		  SineWave.PhaseB_t=0;
-		  SineWave.PhaseC_t=0;
-		  SineWave.PhaseAN_t=0;
-		  SineWave.PhaseBN_t=0;
-		  SineWave.PhaseCN_t=0;
-		  SineWave.PhaseA=0;
-		  SineWave.PhaseB=0;
-		  SineWave.PhaseC=0;
-		  SineWave.PhaseAN=0;
-		  SineWave.PhaseBN=0;
-		  SineWave.PhaseCN=0;
+		  SineWave.PhaseA_t= SineWave.PhaseB_t= SineWave.PhaseC_t=0;
+		  SineWave.PhaseAN_t= SineWave.PhaseBN_t= SineWave.PhaseCN_t=0;
+		  SineWave.PhaseA= SineWave.PhaseB= SineWave.PhaseC=0;
+		  SineWave.PhaseAN= SineWave.PhaseBN= SineWave.PhaseCN=0;
 		  SineWave.WaveFrequency=MIN_FREQUENCY;
-		  HAL_GPIO_WritePin(U_Lo_GPIO_Port, U_Lo_Pin, GPIO_PIN_RESET);
-		  HAL_GPIO_WritePin(V_Lo_GPIO_Port, V_Lo_Pin, GPIO_PIN_RESET);
-		  HAL_GPIO_WritePin(W_Lo_GPIO_Port, W_Lo_Pin, GPIO_PIN_RESET);
 	  }
-//	  int phA,phB,phC;
-//	  if (SineWave.PhaseA>0) phA=1001;
-//	  else phA=0;
-//	  if (SineWave.PhaseB>0) phB=1001;
-//	  else phB=0;
-//	  if (SineWave.PhaseC>0) phC=1001;
-//	  else phC=0;
 	  TIM4->CCR1=SineWave.PhaseA;
 	  TIM4->CCR2=SineWave.PhaseB;
 	  TIM4->CCR3=SineWave.PhaseC;
