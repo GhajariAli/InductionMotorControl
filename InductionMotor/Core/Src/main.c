@@ -26,6 +26,7 @@
 #include "Sbus.h"
 #include "Encoder.h"
 #include "SineWave.h"
+#include "MotorSequencer.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -154,7 +155,6 @@ int main(void)
   HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
   HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_2);
   HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_3);
-  HAL_TIM_Encoder_Start_IT(&htim3,TIM_CHANNEL_ALL);
   HAL_TIM_Base_Start_IT(&htim10);
   HAL_UART_Receive_DMA(&huart6, &receivedSBUS.ReceivedData[0], SBUS_LEN);
   /* USER CODE END 2 */
@@ -170,7 +170,6 @@ int main(void)
   while (1)
   {
 	  //V/F for 208V 60Hz motor under test:
-
 	  double Voltage = SineWave.WaveFrequency * (208000/3600.0);
 	  if (Voltage <=1000 && Voltage >=700) SineWave.VoltageAmplitude= trunc(Voltage);
 	  else if (Voltage <=700 && Voltage >=0) SineWave.VoltageAmplitude= 700;
@@ -235,38 +234,8 @@ int main(void)
 			  }
 		  }
 		  if(SineWave.WaveFrequency >=MIN_FREQUENCY && SineWave.WaveFrequency <= MAX_FREQUENCY && UpdateState==1){
-			  switch (Step){
-				  case 1:
-					  SineWave.PhaseA_t=1;
-					  SineWave.PhaseAN_t=0;
-					  UpdateState=0;
-					  break;
-				  case 2:
-					  SineWave.PhaseC_t=0;
-					  SineWave.PhaseCN_t=1;
-					  UpdateState=0;
-					  break;
-				  case 3:
-					  SineWave.PhaseB_t=1;
-					  SineWave.PhaseBN_t=0;
-					  UpdateState=0;
-					  break;
-				  case 4:
-					  SineWave.PhaseA_t=0;
-					  SineWave.PhaseAN_t=1;
-					  UpdateState=0;
-					  break;
-				  case 5:
-					  SineWave.PhaseC_t=1;
-					  SineWave.PhaseCN_t=0;
-					  UpdateState=0;
-					  break;
-				  case 6:
-					  SineWave.PhaseB_t=0;
-					  SineWave.PhaseBN_t=1;
-					  UpdateState=0;
-					  break;
-				  }
+			  MotorSequence(&SineWave,Step);
+			  UpdateState=0;
 		  }
 	  }
 	  else {

@@ -1,3 +1,7 @@
+#ifndef INC_SINEWAVE_H_
+#define INC_SINEWAVE_H_
+
+
 #include "stdint.h"
 #include "arm_math.h"
 
@@ -24,3 +28,7 @@ typedef struct {
 }ST_SineWave;
 
 void GenerateSine(ST_SineWave* SineWave, int* HundredMicroSecond);
+
+
+
+#endif

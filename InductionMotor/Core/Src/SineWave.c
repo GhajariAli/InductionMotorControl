@@ -1,4 +1,5 @@
 #include "SineWave.h"
+
 void GenerateSine(ST_SineWave* SineWave, int* MicroSecond50){
 	if (!*MicroSecond50){
 		return;
