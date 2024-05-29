@@ -2323,6 +2323,7 @@ int main(void)
  80017a0:	68db      	ldr	r3, [r3, #12]
  80017a2:	4a59      	ldr	r2, [pc, #356]	@ (8001908 <main+0x2c0>)
  80017a4:	6113      	str	r3, [r2, #16]
+			  //Report Speed on UART
 			  char msg[500];
 			  uint32_t RequestedRPM=RequestedFrequency*1735/60;
  80017a6:	4b53      	ldr	r3, [pc, #332]	@ (80018f4 <main+0x2ac>)
@@ -2515,7 +2516,7 @@ int main(void)
 	  		  break;
  8001944:	bf00      	nop
 	  }
-
+	  //Run motor if enabled
 	  if(Enable){
  8001946:	4b76      	ldr	r3, [pc, #472]	@ (8001b20 <main+0x4d8>)
  8001948:	681b      	ldr	r3, [r3, #0]
@@ -2638,7 +2639,6 @@ int main(void)
  8001a2c:	2206      	movs	r2, #6
  8001a2e:	601a      	str	r2, [r3, #0]
 				  }
-
 				  UpdateState=1;
  8001a30:	4b44      	ldr	r3, [pc, #272]	@ (8001b44 <main+0x4fc>)
  8001a32:	2201      	movs	r2, #1
@@ -2689,6 +2689,7 @@ int main(void)
  8001a80:	e02e      	b.n	8001ae0 <main+0x498>
 		  }
 	  }
+	  //if not enabled then stop everything
 	  else {
 		  SineWave.PhaseA_t= SineWave.PhaseB_t= SineWave.PhaseC_t=0;
  8001a82:	4b2a      	ldr	r3, [pc, #168]	@ (8001b2c <main+0x4e4>)
@@ -2743,6 +2744,7 @@ int main(void)
  8001adc:	2205      	movs	r2, #5
  8001ade:	631a      	str	r2, [r3, #48]	@ 0x30
 	  }
+	  //send PWM values out
 	  TIM4->CCR1=SineWave.PhaseA;
  8001ae0:	4a1a      	ldr	r2, [pc, #104]	@ (8001b4c <main+0x504>)
  8001ae2:	4b12      	ldr	r3, [pc, #72]	@ (8001b2c <main+0x4e4>)

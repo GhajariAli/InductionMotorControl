@@ -214,7 +214,7 @@ int main(void)
 	  		  Direction=Reverse;
 	  		  break;
 	  }
-
+	  //Run motor if enabled
 	  if(Enable){
 		  //Generating Sinusoidal PWM
 		  GenerateSine(&SineWave, &FiftyMicroSecond);
@@ -235,7 +235,6 @@ int main(void)
 					  if(Step>1) 	Step--;
 					  else  		Step=6;
 				  }
-
 				  UpdateState=1;
 				  PreviousStepChangeTime= StepChangeTime;
 				  if (StepChangeTime>4000000000) PreviousStepChangeTime=StepChangeTime=0;
@@ -246,6 +245,7 @@ int main(void)
 			  UpdateState=0;
 		  }
 	  }
+	  //if not enabled then stop everything
 	  else {
 		  SineWave.PhaseA_t= SineWave.PhaseB_t= SineWave.PhaseC_t=0;
 		  SineWave.PhaseAN_t= SineWave.PhaseBN_t= SineWave.PhaseCN_t=0;
@@ -253,6 +253,7 @@ int main(void)
 		  SineWave.PhaseAN= SineWave.PhaseBN= SineWave.PhaseCN=0;
 		  SineWave.WaveFrequency=MIN_FREQUENCY;
 	  }
+	  //send PWM values out
 	  TIM4->CCR1=SineWave.PhaseA;
 	  TIM4->CCR2=SineWave.PhaseB;
 	  TIM4->CCR3=SineWave.PhaseC;
