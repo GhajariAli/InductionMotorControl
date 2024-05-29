@@ -22,6 +22,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <stdio.h>
+#include <string.h>
 #include <arm_math.h>
 #include "Sbus.h"
 #include "Encoder.h"
@@ -71,7 +72,7 @@ int32_t EncoderMeasureTime=0;
 int Enable=0;
 int ToggleState=0;
 int UpdateState = 0;
-uint32_t  RequestedFrequency = 5;
+uint32_t  RequestedFrequency = 0;
 StateMachine Direction=0;
 ST_SineWave SineWave;
 int FiftyMicroSecond;
@@ -163,7 +164,7 @@ int main(void)
   /* USER CODE BEGIN WHILE */
 
   SineWave.WaveFrequency=MIN_FREQUENCY;
-  RequestedFrequency = 60;
+  RequestedFrequency = 5;
 
   Step = 1;
 
@@ -171,8 +172,8 @@ int main(void)
   {
 	  //V/F for 208V 60Hz motor under test:
 	  double Voltage = SineWave.WaveFrequency * (208000/3600.0);
-	  if (Voltage <=1000 && Voltage >=700) SineWave.VoltageAmplitude= trunc(Voltage);
-	  else if (Voltage <=700 && Voltage >=0) SineWave.VoltageAmplitude= 700;
+	  if (Voltage <=1000 && Voltage >=800) SineWave.VoltageAmplitude= trunc(Voltage);
+	  else if (Voltage <=800 && Voltage >=0) SineWave.VoltageAmplitude= 800;
 	  else SineWave.VoltageAmplitude= 1000;
 
 	  //Calculate RPM
@@ -180,9 +181,15 @@ int main(void)
 	  //1024*4 pulse / revolution on encoder
 	  //Pully ratio 20:50
 	  //GetEncoderValue(&Encoder); 	//Obsolete since not using GPIO and using timer to capture encoder value
-	  if ((HAL_GetTick()-EncoderMeasureTime)>=10 ){
+	  if ((HAL_GetTick()-EncoderMeasureTime)>=10){
 			  Encoder.SpeedRPM=(Encoder.EncoderValue-Encoder.PreviousEncoderValue)*((60*100)*20)/(1024*4*50);
 			  Encoder.PreviousEncoderValue=Encoder.EncoderValue;
+			  //Report Speed on UART
+			  char msg[500];
+			  uint32_t RequestedRPM=RequestedFrequency*1735/60;
+			  uint32_t Slip= RequestedRPM - abs(Encoder.SpeedRPM);
+			  int len= sprintf(msg,"%ActSpeed = %ld, SetSpeed= %ld, Slip= %ld\n",abs(Encoder.SpeedRPM),RequestedRPM,Slip);
+			  HAL_UART_Transmit_IT(&huart2, msg, len);
 			  EncoderMeasureTime= HAL_GetTick();
 	  }
 	  //enable/disable by push button
@@ -217,6 +224,7 @@ int main(void)
 			  FrequencyChangeTime= HAL_GetTick();
 		  }
 		  //Change State
+		  //This is off of timer 10's 50microsecond interrupt ticks, thus 20000 of it will make 1 second
 		  if (SineWave.WaveFrequency != 0){
 			  if ((StepChangeTime - PreviousStepChangeTime ) > trunc(20000.0/(SineWave.WaveFrequency*6))){
 				  if (Direction==Forward){
