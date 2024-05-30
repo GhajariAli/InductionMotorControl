@@ -111,6 +111,9 @@ Check [This](https://github.com/GhajariAli/DCMotorControl) Repo for DC motor Con
   
   ![image](https://github.com/GhajariAli/InductionMotorControl/assets/124516346/6fe1b854-5e3d-449c-a39a-18fb12fc57a5)
 
+  here is how the syncronous speed, actual speed and slip looks like in a ramp to 50HZ and coast to stop. as you can see it's not great yet, need to source more voltage (currently only have 60VDC), I believe the V/F control can't go all the way to 50hz with 60 volt.
+
+  ![image](https://github.com/GhajariAli/InductionMotorControl/assets/124516346/833b1ae0-6dea-473d-8f38-4d75518faed3)
 
 
 
