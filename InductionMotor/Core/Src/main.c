@@ -28,6 +28,7 @@
 #include "Encoder.h"
 #include "SineWave.h"
 #include "MotorSequencer.h"
+#include "PID.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -76,6 +77,7 @@ uint32_t  RequestedFrequency = 0;
 StateMachine Direction=0;
 ST_SineWave SineWave;
 int FiftyMicroSecond;
+PID_Controller PID;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -164,9 +166,22 @@ int main(void)
   /* USER CODE BEGIN WHILE */
 
   SineWave.WaveFrequency=MIN_FREQUENCY;
-  RequestedFrequency = 5;
+  RequestedFrequency = 50;
 
   Step = 1;
+
+  PID.ControlMode=Velocity;
+  PID.Kp=5;
+  PID.Ki=0;
+  PID.Kd=0;
+  PID.dt=10;
+  PID.integral=0;
+  PID.min_output= 5;
+  PID.max_output= 55;
+  PID.min_Integral= 5;
+  PID.max_Integral= 55;
+  PID.output=10;
+  PID.target=100;
 
   while (1)
   {
@@ -182,15 +197,18 @@ int main(void)
 	  //Pully ratio 20:50
 	  //GetEncoderValue(&Encoder); 	//Obsolete since not using GPIO and using timer to capture encoder value
 	  if ((HAL_GetTick()-EncoderMeasureTime)>=10){
-			  Encoder.SpeedRPM=(Encoder.EncoderValue-Encoder.PreviousEncoderValue)*((60*100)*20)/(1024*4*50);
-			  Encoder.PreviousEncoderValue=Encoder.EncoderValue;
-			  //Report Speed on UART
-			  char msg[500];
-			  uint32_t RequestedRPM=RequestedFrequency*1735/60;
-			  uint32_t Slip= RequestedRPM - abs(Encoder.SpeedRPM);
-			  int len= sprintf(msg,"%ActSpeed = %ld, SetSpeed= %ld, Slip= %ld\n",abs(Encoder.SpeedRPM),RequestedRPM,Slip);
-			  HAL_UART_Transmit_IT(&huart2, msg, len);
-			  EncoderMeasureTime= HAL_GetTick();
+		  Encoder.SpeedRPM=(Encoder.EncoderValue-Encoder.PreviousEncoderValue)*((60*100)*20)/(1024*4*50);
+		  Encoder.PreviousEncoderValue=Encoder.EncoderValue;
+		  //PID Speed Control
+		  updatePID(&PID, abs(Encoder.SpeedRPM));
+		  RequestedFrequency=PID.output;
+		  //Report Speed on UART
+		  char msg[500];
+		  uint32_t RequestedRPM=RequestedFrequency*1735/60;
+		  uint32_t Slip= RequestedRPM - abs(Encoder.SpeedRPM);
+		  int len= sprintf(msg,"%ActSpeed = %ld, SetSpeed= %ld, Slip= %ld\n",abs(Encoder.SpeedRPM),RequestedRPM,Slip);
+		  HAL_UART_Transmit_IT(&huart2, msg, len);
+		  EncoderMeasureTime= HAL_GetTick();
 	  }
 	  //enable/disable by push button
 	  if(HAL_GPIO_ReadPin(B1_GPIO_Port, B1_Pin)) ToggleState=1;
