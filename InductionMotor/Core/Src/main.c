@@ -162,7 +162,7 @@ int main(void)
   /* USER CODE BEGIN WHILE */
 
   SineWave.WaveFrequency=MIN_FREQUENCY;
-  RequestedFrequency = 5;
+  RequestedFrequency = 28;
 
   PID.ControlMode=Velocity;
   PID.Kp=5;
@@ -181,7 +181,7 @@ int main(void)
   {
 	  //V/F for 208V 60Hz motor under test:
 	  double Voltage = SineWave.WaveFrequency * (1155.0/60.0);
-	  SineWave.VoltageAmplitude= 500;//trunc(Voltage);
+	  SineWave.VoltageAmplitude= 1000;//trunc(Voltage);
 
 	  //Calculate RPM
 	  //read every 10ms so *100*60 to be per minute
@@ -241,9 +241,16 @@ int main(void)
 		  SineWave.WaveFrequency=MIN_FREQUENCY;
 	  }
 	  //send PWM values out
-	  TIM1->CCR1=SineWave.PhaseA;
-	  TIM1->CCR2=SineWave.PhaseB;
-	  TIM1->CCR3=SineWave.PhaseC;
+	  if(Direction==Forward){
+		  TIM1->CCR1=SineWave.PhaseA;
+		  TIM1->CCR2=SineWave.PhaseB;
+		  TIM1->CCR3=SineWave.PhaseC;
+	  }
+	  else{
+		  TIM1->CCR1=SineWave.PhaseB;
+		  TIM1->CCR2=SineWave.PhaseA;
+		  TIM1->CCR3=SineWave.PhaseC;
+	  }
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
