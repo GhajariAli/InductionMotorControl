@@ -27,7 +27,6 @@
 #include "Sbus.h"
 #include "Encoder.h"
 #include "SineWave.h"
-#include "MotorSequencer.h"
 #include "PID.h"
 /* USER CODE END Includes */
 
@@ -51,7 +50,6 @@ typedef enum{
 
 /* Private variables ---------------------------------------------------------*/
 TIM_HandleTypeDef htim1;
-TIM_HandleTypeDef htim2;
 TIM_HandleTypeDef htim3;
 TIM_HandleTypeDef htim10;
 
@@ -88,7 +86,6 @@ static void MX_USART2_UART_Init(void);
 static void MX_TIM3_Init(void);
 static void MX_USART6_UART_Init(void);
 static void MX_TIM10_Init(void);
-static void MX_TIM2_Init(void);
 static void MX_TIM1_Init(void);
 /* USER CODE BEGIN PFP */
 void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim){
@@ -145,18 +142,17 @@ int main(void)
   MX_GPIO_Init();
   MX_DMA_Init();
   MX_USART2_UART_Init();
-  MX_TIM3_Init();
   MX_USART6_UART_Init();
-  MX_TIM10_Init();
-  MX_TIM2_Init();
   MX_TIM1_Init();
+  MX_TIM3_Init();
+  MX_TIM10_Init();
   /* USER CODE BEGIN 2 */
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
+  HAL_TIMEx_PWMN_Start(&htim1, TIM_CHANNEL_1);
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_2);
+  HAL_TIMEx_PWMN_Start(&htim1, TIM_CHANNEL_2);
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_3);
-  HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
-  HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_2);
-  HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_3);
+  HAL_TIMEx_PWMN_Start(&htim1, TIM_CHANNEL_3);
   HAL_TIM_Base_Start_IT(&htim10);
   HAL_TIM_Encoder_Start_IT(&htim3, TIM_CHANNEL_ALL);
   HAL_UART_Receive_DMA(&huart6, &receivedSBUS.ReceivedData[0], SBUS_LEN);
@@ -166,9 +162,7 @@ int main(void)
   /* USER CODE BEGIN WHILE */
 
   SineWave.WaveFrequency=MIN_FREQUENCY;
-  RequestedFrequency = 60;
-
-  Step = 1;
+  RequestedFrequency = 5;
 
   PID.ControlMode=Velocity;
   PID.Kp=5;
@@ -187,7 +181,7 @@ int main(void)
   {
 	  //V/F for 208V 60Hz motor under test:
 	  double Voltage = SineWave.WaveFrequency * (1155.0/60.0);
-	  SineWave.VoltageAmplitude= 1000;//trunc(Voltage);
+	  SineWave.VoltageAmplitude= 500;//trunc(Voltage);
 
 	  //Calculate RPM
 	  //read every 10ms so *100*60 to be per minute
@@ -204,7 +198,7 @@ int main(void)
 		  char msg[500];
 		  uint32_t RequestedRPM=RequestedFrequency*1735/60;
 		  uint32_t Slip= RequestedRPM - abs(Encoder.SpeedRPM);
-		  int len= sprintf(msg,"%Voltage = %ld, Frequency= %ld\n",SineWave.VoltageAmplitude,SineWave.WaveFrequency);//(msg,"%ActSpeed = %ld, SetSpeed= %ld, Slip= %ld\n",abs(Encoder.SpeedRPM),RequestedRPM,Slip);
+		  int len= sprintf(msg,"%Voltage = %ld, Frequency= %ld\n",SineWave.VoltageAmplitude,SineWave.WaveFrequency);
 		  HAL_UART_Transmit_IT(&huart2, msg, len);
 		  EncoderMeasureTime= HAL_GetTick();
 	  }
@@ -239,43 +233,17 @@ int main(void)
 			  SineWave.WaveFrequency++;
 			  FrequencyChangeTime= HAL_GetTick();
 		  }
-		  //Change State
-		  //This is off of timer 10's 50microsecond interrupt ticks, thus 20000 of it will make 1 second
-		  if (SineWave.WaveFrequency != 0){
-			  if ((StepChangeTime - PreviousStepChangeTime ) > trunc(20000.0/(SineWave.WaveFrequency*6))){
-				  if (Direction==Forward){
-					  if(Step<6) 	Step++;
-					  else  		Step=1;
-				  }
-				  if (Direction==Reverse){
-					  if(Step>1) 	Step--;
-					  else  		Step=6;
-				  }
-				  UpdateState=1;
-				  PreviousStepChangeTime= StepChangeTime;
-				  if (StepChangeTime>4000000000) PreviousStepChangeTime=StepChangeTime=0;
-			  }
-		  }
-		  if(SineWave.WaveFrequency >=MIN_FREQUENCY && SineWave.WaveFrequency <= MAX_FREQUENCY && UpdateState==1){
-			  MotorSequence(&SineWave,Step);
-			  UpdateState=0;
-		  }
 	  }
 	  //if not enabled then stop everything
 	  else {
-		  SineWave.PhaseA_t= SineWave.PhaseB_t= SineWave.PhaseC_t=0;
-  		  SineWave.PhaseAN_t= SineWave.PhaseBN_t= SineWave.PhaseCN_t=0;
-		  SineWave.PhaseA= SineWave.PhaseB= SineWave.PhaseC=0;
-		  SineWave.PhaseAN= SineWave.PhaseBN= SineWave.PhaseCN=0;
+		  SineWave.PhaseA	=SineWave.PhaseB	=SineWave.PhaseC	=0;
+		  SineWave.PhaseA_t	=SineWave.PhaseB_t	=SineWave.PhaseC_t	=0;
 		  SineWave.WaveFrequency=MIN_FREQUENCY;
 	  }
 	  //send PWM values out
 	  TIM1->CCR1=SineWave.PhaseA;
 	  TIM1->CCR2=SineWave.PhaseB;
 	  TIM1->CCR3=SineWave.PhaseC;
-	  TIM2->CCR1=SineWave.PhaseAN;
-	  TIM2->CCR2=SineWave.PhaseBN;
-	  TIM2->CCR3=SineWave.PhaseCN;
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -352,7 +320,7 @@ static void MX_TIM1_Init(void)
   htim1.Instance = TIM1;
   htim1.Init.Prescaler = 5-1;
   htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim1.Init.Period = 1000-1;
+  htim1.Init.Period = 1000;
   htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim1.Init.RepetitionCounter = 0;
   htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
@@ -379,7 +347,7 @@ static void MX_TIM1_Init(void)
   sConfigOC.Pulse = 0;
   sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
   sConfigOC.OCNPolarity = TIM_OCNPOLARITY_HIGH;
-  sConfigOC.OCFastMode = TIM_OCFAST_ENABLE;
+  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
   sConfigOC.OCIdleState = TIM_OCIDLESTATE_RESET;
   sConfigOC.OCNIdleState = TIM_OCNIDLESTATE_RESET;
   if (HAL_TIM_PWM_ConfigChannel(&htim1, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
@@ -397,7 +365,7 @@ static void MX_TIM1_Init(void)
   sBreakDeadTimeConfig.OffStateRunMode = TIM_OSSR_DISABLE;
   sBreakDeadTimeConfig.OffStateIDLEMode = TIM_OSSI_DISABLE;
   sBreakDeadTimeConfig.LockLevel = TIM_LOCKLEVEL_OFF;
-  sBreakDeadTimeConfig.DeadTime = 0;
+  sBreakDeadTimeConfig.DeadTime = 3;
   sBreakDeadTimeConfig.BreakState = TIM_BREAK_DISABLE;
   sBreakDeadTimeConfig.BreakPolarity = TIM_BREAKPOLARITY_HIGH;
   sBreakDeadTimeConfig.AutomaticOutput = TIM_AUTOMATICOUTPUT_DISABLE;
@@ -409,73 +377,6 @@ static void MX_TIM1_Init(void)
 
   /* USER CODE END TIM1_Init 2 */
   HAL_TIM_MspPostInit(&htim1);
-
-}
-
-/**
-  * @brief TIM2 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_TIM2_Init(void)
-{
-
-  /* USER CODE BEGIN TIM2_Init 0 */
-
-  /* USER CODE END TIM2_Init 0 */
-
-  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
-  TIM_MasterConfigTypeDef sMasterConfig = {0};
-  TIM_OC_InitTypeDef sConfigOC = {0};
-
-  /* USER CODE BEGIN TIM2_Init 1 */
-
-  /* USER CODE END TIM2_Init 1 */
-  htim2.Instance = TIM2;
-  htim2.Init.Prescaler = 5-1;
-  htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim2.Init.Period = 1000-1;
-  htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-  htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-  if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
-  if (HAL_TIM_ConfigClockSource(&htim2, &sClockSourceConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  if (HAL_TIM_PWM_Init(&htim2) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
-  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
-  if (HAL_TIMEx_MasterConfigSynchronization(&htim2, &sMasterConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sConfigOC.OCMode = TIM_OCMODE_PWM1;
-  sConfigOC.Pulse = 0;
-  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
-  sConfigOC.OCFastMode = TIM_OCFAST_ENABLE;
-  if (HAL_TIM_PWM_ConfigChannel(&htim2, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  if (HAL_TIM_PWM_ConfigChannel(&htim2, &sConfigOC, TIM_CHANNEL_2) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  if (HAL_TIM_PWM_ConfigChannel(&htim2, &sConfigOC, TIM_CHANNEL_3) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN TIM2_Init 2 */
-
-  /* USER CODE END TIM2_Init 2 */
-  HAL_TIM_MspPostInit(&htim2);
 
 }
 
