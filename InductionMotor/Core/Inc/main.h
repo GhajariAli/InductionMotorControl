@@ -61,28 +61,16 @@ void Error_Handler(void);
 /* Private defines -----------------------------------------------------------*/
 #define B1_Pin GPIO_PIN_13
 #define B1_GPIO_Port GPIOC
-#define Encoder_chA_Pin GPIO_PIN_0
-#define Encoder_chA_GPIO_Port GPIOC
-#define Encoder_chA_EXTI_IRQn EXTI0_IRQn
-#define Encoder_chB_Pin GPIO_PIN_1
-#define Encoder_chB_GPIO_Port GPIOC
-#define Encoder_chB_EXTI_IRQn EXTI1_IRQn
 #define USART_TX_Pin GPIO_PIN_2
 #define USART_TX_GPIO_Port GPIOA
 #define USART_RX_Pin GPIO_PIN_3
 #define USART_RX_GPIO_Port GPIOA
 #define LD2_Pin GPIO_PIN_5
 #define LD2_GPIO_Port GPIOA
-#define V_Lo_Pin GPIO_PIN_4
-#define V_Lo_GPIO_Port GPIOC
 #define TMS_Pin GPIO_PIN_13
 #define TMS_GPIO_Port GPIOA
 #define TCK_Pin GPIO_PIN_14
 #define TCK_GPIO_Port GPIOA
-#define U_Lo_Pin GPIO_PIN_10
-#define U_Lo_GPIO_Port GPIOC
-#define W_Lo_Pin GPIO_PIN_12
-#define W_Lo_GPIO_Port GPIOC
 #define SWO_Pin GPIO_PIN_3
 #define SWO_GPIO_Port GPIOB
 
