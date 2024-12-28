@@ -142,10 +142,10 @@ int main(void)
   MX_GPIO_Init();
   MX_DMA_Init();
   MX_USART2_UART_Init();
-  MX_USART6_UART_Init();
-  MX_TIM1_Init();
   MX_TIM3_Init();
+  MX_USART6_UART_Init();
   MX_TIM10_Init();
+  MX_TIM1_Init();
   /* USER CODE BEGIN 2 */
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
   HAL_TIMEx_PWMN_Start(&htim1, TIM_CHANNEL_1);

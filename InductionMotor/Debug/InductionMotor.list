@@ -2361,14 +2361,14 @@ int main(void)
  80018a4:	f000 fbd4 	bl	8002050 <MX_DMA_Init>
   MX_USART2_UART_Init();
  80018a8:	f000 fb7c 	bl	8001fa4 <MX_USART2_UART_Init>
-  MX_USART6_UART_Init();
- 80018ac:	f000 fba4 	bl	8001ff8 <MX_USART6_UART_Init>
-  MX_TIM1_Init();
- 80018b0:	f000 fa48 	bl	8001d44 <MX_TIM1_Init>
   MX_TIM3_Init();
- 80018b4:	f000 fafe 	bl	8001eb4 <MX_TIM3_Init>
+ 80018ac:	f000 fb02 	bl	8001eb4 <MX_TIM3_Init>
+  MX_USART6_UART_Init();
+ 80018b0:	f000 fba2 	bl	8001ff8 <MX_USART6_UART_Init>
   MX_TIM10_Init();
- 80018b8:	f000 fb50 	bl	8001f5c <MX_TIM10_Init>
+ 80018b4:	f000 fb52 	bl	8001f5c <MX_TIM10_Init>
+  MX_TIM1_Init();
+ 80018b8:	f000 fa44 	bl	8001d44 <MX_TIM1_Init>
   /* USER CODE BEGIN 2 */
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
  80018bc:	2100      	movs	r1, #0
