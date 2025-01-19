@@ -85,6 +85,7 @@ uint8_t ADCReady=0;
 float Potentiameter=0;
 float MCUTemp=0;
 float DriveTemp =0,Current_U =0,Current_V =0,Current_W =0,Current_N =0;
+uint8_t PotZeroed =0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -117,6 +118,15 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc){
 	ADCReady=1;
 	HAL_ADC_Stop_DMA(&hadc1);
+}
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+  if(GPIO_Pin == GPIO_PIN_0){
+	  ToggleState=1;
+  }
+  if(GPIO_Pin== GPIO_PIN_2){
+	  Enable=0;
+  }
 }
 /* USER CODE END PFP */
 
@@ -177,8 +187,18 @@ int main(void)
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
 
+  HAL_GPIO_WritePin(LD1_GPIO_Port, LD1_Pin, 1);
+  HAL_Delay(500);
+  HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, 1);
+  HAL_GPIO_WritePin(LD1_GPIO_Port, LD1_Pin, 0);
+  HAL_Delay(500);
+  HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, 1);
+  HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, 0);
+  HAL_Delay(500);
+  HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, 0);
+  HAL_Delay(500);
+
   SineWave.WaveFrequency=MIN_FREQUENCY;
-  RequestedFrequency = 30;
 
   PID.ControlMode=Velocity;
   PID.Kp=5;
@@ -206,6 +226,14 @@ int main(void)
 		  Current_N = ADCRawValues[4];
 		  HAL_ADC_Start_DMA(&hadc1, ADCRawValues, 7);
 	  }
+	  if (Potentiameter<5.0) PotZeroed=1;
+	  (PotZeroed==1)? (HAL_GPIO_WritePin(LD1_GPIO_Port,LD1_Pin,0)): (HAL_GPIO_WritePin(LD1_GPIO_Port, LD1_Pin, 1));
+
+	  if (PotZeroed==1 && Potentiameter >=5.0 ){
+		  RequestedFrequency= Potentiameter * 60.0/100.0;
+		  if (State==Off) ToggleState=1;
+	  }
+
 	  //V/F for 208V 60Hz motor under test:
 	  double Voltage = ( SineWave.WaveFrequency * (208.0/60.0) ) * 10.0;
 	  if ( Voltage < 300) Voltage=250;
@@ -232,8 +260,7 @@ int main(void)
 		  EncoderMeasureTime= HAL_GetTick();
 	  }
 	  //enable/disable by push button
-	  if(HAL_GPIO_ReadPin(PB1_GPIO_Port, PB1_Pin)) ToggleState=1;
-	  while (!HAL_GPIO_ReadPin(PB1_GPIO_Port, PB1_Pin) && ToggleState){
+	  if (ToggleState){
 		  if (State==Forward || State==Reverse) State=Off;
 		  else if (State==Off && PreviousState==Reverse) State=PreviousState=Forward;
 		  else if (State==Off && PreviousState==Forward) State=PreviousState=Reverse;
@@ -254,12 +281,13 @@ int main(void)
 	  		  break;
 	  }
 	  //Run motor if enabled
-	  if(Enable){
+	  if(Enable && PotZeroed && Potentiameter >10.0){
 		  //Generating Sinusoidal PWM
 		  GenerateSine(&SineWave, &FiftyMicroSecond);
 		  //Ramp Frequency
-		  if ((RequestedFrequency > SineWave.WaveFrequency) && ((HAL_GetTick()-FrequencyChangeTime)>=1000 )){
-			  SineWave.WaveFrequency++;
+		  if ((HAL_GetTick()-FrequencyChangeTime)>=300 ){
+			  if (RequestedFrequency > SineWave.WaveFrequency) SineWave.WaveFrequency++;
+			  else SineWave.WaveFrequency--;
 			  FrequencyChangeTime= HAL_GetTick();
 		  }
 	  }
@@ -707,10 +735,10 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOC, ShutDown_Pin|LD1_Pin|LD2_Pin|LD3_Pin, GPIO_PIN_RESET);
 
-  /*Configure GPIO pins : PB1_Pin DriveFault_Pin */
-  GPIO_InitStruct.Pin = PB1_Pin|DriveFault_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  /*Configure GPIO pins : PB1_INT_Pin DriveFault_INT_Pin */
+  GPIO_InitStruct.Pin = PB1_INT_Pin|DriveFault_INT_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
   /*Configure GPIO pins : ShutDown_Pin LD1_Pin LD2_Pin LD3_Pin */
@@ -719,6 +747,13 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
+  /* EXTI interrupt init*/
+  HAL_NVIC_SetPriority(EXTI0_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI0_IRQn);
+
+  HAL_NVIC_SetPriority(EXTI2_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI2_IRQn);
 
 /* USER CODE BEGIN MX_GPIO_Init_2 */
 /* USER CODE END MX_GPIO_Init_2 */

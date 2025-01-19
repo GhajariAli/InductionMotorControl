@@ -59,12 +59,14 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
-#define PB1_Pin GPIO_PIN_0
-#define PB1_GPIO_Port GPIOC
+#define PB1_INT_Pin GPIO_PIN_0
+#define PB1_INT_GPIO_Port GPIOC
+#define PB1_INT_EXTI_IRQn EXTI0_IRQn
 #define ShutDown_Pin GPIO_PIN_1
 #define ShutDown_GPIO_Port GPIOC
-#define DriveFault_Pin GPIO_PIN_2
-#define DriveFault_GPIO_Port GPIOC
+#define DriveFault_INT_Pin GPIO_PIN_2
+#define DriveFault_INT_GPIO_Port GPIOC
+#define DriveFault_INT_EXTI_IRQn EXTI2_IRQn
 #define Potentiameter_Pin GPIO_PIN_3
 #define Potentiameter_GPIO_Port GPIOC
 #define Drive_Temp_Pin GPIO_PIN_1
