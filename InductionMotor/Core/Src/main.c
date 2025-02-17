@@ -64,7 +64,6 @@ DMA_HandleTypeDef hdma_usart1_rx;
 /* USER CODE BEGIN PV */
 tsbus receivedSBUS;
 uint32_t PreviousStepChangeTime=0;
-uint32_t StepChangeTime=0;
 uint32_t FrequencyChangeTime=0;
 uint32_t ScreenUpdateTime=0;
 int Step=1;
@@ -80,7 +79,7 @@ StateMachine Direction=0;
 ST_SineWave SineWave;
 int FiftyMicroSecond;
 PID_Controller PID;
-uint32_t ADCRawValues[7];
+uint16_t ADCRawValues[7];
 uint8_t ADCReady=0;
 float Potentiameter=0;
 float MCUTemp=0;
@@ -107,7 +106,6 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim){
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 	if (htim->Instance == TIM10){
 		FiftyMicroSecond=1;
-		StepChangeTime++;
 	}
 }
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
@@ -117,7 +115,6 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
 }
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc){
 	ADCReady=1;
-	HAL_ADC_Stop_DMA(&hadc1);
 }
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
@@ -181,12 +178,12 @@ int main(void)
   HAL_TIM_Base_Start_IT(&htim10);
   HAL_TIM_Encoder_Start_IT(&htim3, TIM_CHANNEL_ALL);
   HAL_UART_Receive_DMA(&huart2, &receivedSBUS.ReceivedData[0], SBUS_LEN);
-  HAL_ADC_Start_DMA(&hadc1, (uint32_t*) ADCRawValues, 7);
+  HAL_ADC_Start_DMA(&hadc1, (uint16_t*) ADCRawValues, 7);
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-
+  HAL_UART_Transmit_IT(&huart2, "Induction Driver V2.0\n", strlen("Induction Driver V2.0\n"));
   HAL_GPIO_WritePin(LD1_GPIO_Port, LD1_Pin, 1);
   HAL_Delay(500);
   HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, 1);
@@ -218,19 +215,20 @@ int main(void)
   while (1)
   {
 	  if(ADCReady==1){
-		  Potentiameter=ADCRawValues[5]*100/4096.0;
-		  DriveTemp = ADCRawValues[0];
-		  Current_U = ADCRawValues[1];
-		  Current_V = ADCRawValues[2];
-		  Current_W = ADCRawValues[3];
-		  Current_N = ADCRawValues[4];
-		  HAL_ADC_Start_DMA(&hadc1, ADCRawValues, 7);
+		  ADCReady=0;
+		  DriveTemp 	= ADCRawValues[0];
+		  Current_U 	= ADCRawValues[1];
+		  Current_V 	= ADCRawValues[2];
+		  Current_W 	= ADCRawValues[3];
+		  Current_N 	= ADCRawValues[4];
+		  Potentiameter	= ADCRawValues[5] *100.0/4096.0;
+		  MCUTemp		= ADCRawValues[6];
 	  }
 	  if (Potentiameter<5.0) PotZeroed=1;
 	  (PotZeroed==1)? (HAL_GPIO_WritePin(LD1_GPIO_Port,LD1_Pin,0)): (HAL_GPIO_WritePin(LD1_GPIO_Port, LD1_Pin, 1));
 
 	  if (PotZeroed==1 && Potentiameter >=5.0 ){
-		  RequestedFrequency= Potentiameter * 60.0/100.0;
+		  RequestedFrequency= 10;//Potentiameter * 60.0/100.0;
 		  if (State==Off) ToggleState=1;
 	  }
 
@@ -239,7 +237,6 @@ int main(void)
 	  if ( Voltage < 300) Voltage=250;
 	  else if (Voltage >= 1000) Voltage = 1000;
 	  SineWave.VoltageAmplitude= trunc(Voltage);
-
 	  //Calculate RPM
 	  //read every 10ms so *100*60 to be per minute
 	  //1024*4 pulse / revolution on encoder
@@ -255,7 +252,7 @@ int main(void)
 		  char msg[500];
 		  uint32_t RequestedRPM=RequestedFrequency*1735/60;
 		  uint32_t Slip= RequestedRPM - abs(Encoder.SpeedRPM);
-		  int len= sprintf(msg,"%Voltage = %ld, Frequency= %ld\n",SineWave.VoltageAmplitude,SineWave.WaveFrequency);
+		  int len= sprintf(msg,"%.2f, U=%.2f, V=%.2f, W=%.2f, %.2f, %.2f, %.2f\n",DriveTemp,Current_U,Current_V,Current_W,Current_N,Potentiameter ,MCUTemp);
 		  HAL_UART_Transmit_IT(&huart2, msg, len);
 		  EncoderMeasureTime= HAL_GetTick();
 	  }
@@ -281,13 +278,13 @@ int main(void)
 	  		  break;
 	  }
 	  //Run motor if enabled
-	  if(Enable && PotZeroed && Potentiameter >10.0){
+	  if(Enable && State!= Off && PotZeroed && Potentiameter >10.0){
 		  //Generating Sinusoidal PWM
 		  GenerateSine(&SineWave, &FiftyMicroSecond);
 		  //Ramp Frequency
-		  if ((HAL_GetTick()-FrequencyChangeTime)>=300 ){
+		  if ((HAL_GetTick()-FrequencyChangeTime)>=300 && RequestedFrequency != SineWave.WaveFrequency){
 			  if (RequestedFrequency > SineWave.WaveFrequency) SineWave.WaveFrequency++;
-			  else SineWave.WaveFrequency--;
+			  else if (RequestedFrequency < SineWave.WaveFrequency) SineWave.WaveFrequency--;
 			  FrequencyChangeTime= HAL_GetTick();
 		  }
 	  }
@@ -391,7 +388,7 @@ static void MX_ADC1_Init(void)
   hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
   hadc1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
   hadc1.Init.NbrOfConversion = 7;
-  hadc1.Init.DMAContinuousRequests = DISABLE;
+  hadc1.Init.DMAContinuousRequests = ENABLE;
   hadc1.Init.EOCSelection = ADC_EOC_SEQ_CONV;
   if (HAL_ADC_Init(&hadc1) != HAL_OK)
   {
@@ -402,7 +399,7 @@ static void MX_ADC1_Init(void)
   */
   sConfig.Channel = ADC_CHANNEL_1;
   sConfig.Rank = 1;
-  sConfig.SamplingTime = ADC_SAMPLETIME_28CYCLES;
+  sConfig.SamplingTime = ADC_SAMPLETIME_144CYCLES;
   if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
   {
     Error_Handler();
@@ -535,7 +532,7 @@ static void MX_TIM1_Init(void)
   sBreakDeadTimeConfig.OffStateRunMode = TIM_OSSR_DISABLE;
   sBreakDeadTimeConfig.OffStateIDLEMode = TIM_OSSI_DISABLE;
   sBreakDeadTimeConfig.LockLevel = TIM_LOCKLEVEL_OFF;
-  sBreakDeadTimeConfig.DeadTime = 3;
+  sBreakDeadTimeConfig.DeadTime = 15;
   sBreakDeadTimeConfig.BreakState = TIM_BREAK_DISABLE;
   sBreakDeadTimeConfig.BreakPolarity = TIM_BREAKPOLARITY_HIGH;
   sBreakDeadTimeConfig.AutomaticOutput = TIM_AUTOMATICOUTPUT_DISABLE;
@@ -683,7 +680,7 @@ static void MX_USART2_UART_Init(void)
   huart2.Init.WordLength = UART_WORDLENGTH_8B;
   huart2.Init.StopBits = UART_STOPBITS_1;
   huart2.Init.Parity = UART_PARITY_NONE;
-  huart2.Init.Mode = UART_MODE_TX_RX;
+  huart2.Init.Mode = UART_MODE_TX;
   huart2.Init.HwFlowCtl = UART_HWCONTROL_NONE;
   huart2.Init.OverSampling = UART_OVERSAMPLING_16;
   if (HAL_UART_Init(&huart2) != HAL_OK)

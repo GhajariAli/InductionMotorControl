@@ -10,6 +10,8 @@
 #define MAX_FREQUENCY 60
 #define MIN_FREQUENCY 5
 
+#define ZERO_THRESHOLD 5
+
 typedef struct {
 	uint32_t PhaseA;
 	uint32_t PhaseA_t;
