@@ -24,6 +24,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <arm_math.h>
+#include <stdlib.h>
 #include "Sbus.h"
 #include "Encoder.h"
 #include "SineWave.h"
@@ -169,12 +170,14 @@ int main(void)
   MX_USART1_UART_Init();
   MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
-  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
-  HAL_TIMEx_PWMN_Start(&htim1, TIM_CHANNEL_1);
-  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_2);
-  HAL_TIMEx_PWMN_Start(&htim1, TIM_CHANNEL_2);
-  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_3);
-  HAL_TIMEx_PWMN_Start(&htim1, TIM_CHANNEL_3);
+//  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
+//  HAL_TIMEx_PWMN_Start(&htim1, TIM_CHANNEL_1);
+//  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_2);
+//  HAL_TIMEx_PWMN_Start(&htim1, TIM_CHANNEL_2);
+//  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_3);
+//  HAL_TIMEx_PWMN_Start(&htim1, TIM_CHANNEL_3);
+  TIM1->BDTR|=1<<15;//Enables timer 1 outputs that are set in CCER and CCER register
+  TIM1->CR1|=1<<0;//Enables the counting in timer 1
   HAL_TIM_Base_Start_IT(&htim10);
   HAL_TIM_Encoder_Start_IT(&htim3, TIM_CHANNEL_ALL);
   HAL_UART_Receive_DMA(&huart2, &receivedSBUS.ReceivedData[0], SBUS_LEN);
@@ -196,6 +199,10 @@ int main(void)
   HAL_Delay(500);
 
   SineWave.WaveFrequency=MIN_FREQUENCY;
+  SineWave.FrequencyA=MIN_FREQUENCY;
+  SineWave.FrequencyB=MIN_FREQUENCY;
+  SineWave.FrequencyC=MIN_FREQUENCY;
+
 
   PID.ControlMode=Velocity;
   PID.Kp=5;
@@ -228,13 +235,13 @@ int main(void)
 	  (PotZeroed==1)? (HAL_GPIO_WritePin(LD1_GPIO_Port,LD1_Pin,0)): (HAL_GPIO_WritePin(LD1_GPIO_Port, LD1_Pin, 1));
 
 	  if (PotZeroed==1 && Potentiameter >=5.0 ){
-		  RequestedFrequency= 10;//Potentiameter * 60.0/100.0;
+		  RequestedFrequency= Potentiameter * 60.0/100.0;
 		  if (State==Off) ToggleState=1;
 	  }
 
 	  //V/F for 208V 60Hz motor under test:
 	  double Voltage = ( SineWave.WaveFrequency * (208.0/60.0) ) * 10.0;
-	  if ( Voltage < 300) Voltage=250;
+	  if ( Voltage < 600) Voltage=600;
 	  else if (Voltage >= 1000) Voltage = 1000;
 	  SineWave.VoltageAmplitude= trunc(Voltage);
 	  //Calculate RPM
@@ -246,12 +253,12 @@ int main(void)
 		  Encoder.SpeedRPM=(Encoder.EncoderValue-Encoder.PreviousEncoderValue)*((60*100)*20)/(1024*4*50);
 		  Encoder.PreviousEncoderValue=Encoder.EncoderValue;
 		  //PID Speed Control
-		  updatePID(&PID, abs(Encoder.SpeedRPM));
+		  updatePID(&PID, fabs(Encoder.SpeedRPM));
 		  //RequestedFrequency=PID.output;
 		  //Report Speed on UART
 		  char msg[500];
 		  uint32_t RequestedRPM=RequestedFrequency*1735/60;
-		  uint32_t Slip= RequestedRPM - abs(Encoder.SpeedRPM);
+		  uint32_t Slip= RequestedRPM - fabs(Encoder.SpeedRPM);
 		  int len= sprintf(msg,"%.2f, U=%.2f, V=%.2f, W=%.2f, %.2f, %.2f, %.2f\n",DriveTemp,Current_U,Current_V,Current_W,Current_N,Potentiameter ,MCUTemp);
 		  HAL_UART_Transmit_IT(&huart2, msg, len);
 		  EncoderMeasureTime= HAL_GetTick();
@@ -278,11 +285,13 @@ int main(void)
 	  		  break;
 	  }
 	  //Run motor if enabled
+	  Direction=Forward;//testing forward for now
+	  RequestedFrequency=30;//testing fixed frequency
 	  if(Enable && State!= Off && PotZeroed && Potentiameter >10.0){
 		  //Generating Sinusoidal PWM
 		  GenerateSine(&SineWave, &FiftyMicroSecond);
 		  //Ramp Frequency
-		  if ((HAL_GetTick()-FrequencyChangeTime)>=300 && RequestedFrequency != SineWave.WaveFrequency){
+		  if ((HAL_GetTick()-FrequencyChangeTime)>=200 && RequestedFrequency != SineWave.WaveFrequency){
 			  if (RequestedFrequency > SineWave.WaveFrequency) SineWave.WaveFrequency++;
 			  else if (RequestedFrequency < SineWave.WaveFrequency) SineWave.WaveFrequency--;
 			  FrequencyChangeTime= HAL_GetTick();
@@ -291,20 +300,75 @@ int main(void)
 	  //if not enabled then stop everything
 	  else {
 		  SineWave.PhaseA	=SineWave.PhaseB	=SineWave.PhaseC	=0;
-		  SineWave.PhaseA_t	=SineWave.PhaseB_t	=SineWave.PhaseC_t	=0;
+		  SineWave.Time	=0;
 		  SineWave.WaveFrequency=MIN_FREQUENCY;
 	  }
 	  //send PWM values out
 	  if(Direction==Forward){
-		  TIM1->CCR1=SineWave.PhaseA;
-		  TIM1->CCR2=SineWave.PhaseB;
-		  TIM1->CCR3=SineWave.PhaseC;
+		  if (SineWave.PhaseA > 0){
+			  TIM1->CCER &= ~(1<<2);
+			  TIM1->CCER |=   1<<0;
+			  TIM1->CCR1  = SineWave.PhaseA;
+		  }
+		  else{
+			  TIM1->CCER &= ~(1<<0);
+			  TIM1->CCER |=   1<<2;
+			  TIM1->CCR1  = -1*SineWave.PhaseA;
+		  }
+		  if (SineWave.PhaseB > 0){
+			  TIM1->CCER &= ~(1<<6);
+			  TIM1->CCER |=   1<<4;
+			  TIM1->CCR2  = SineWave.PhaseB;
+		  }
+		  else{
+			  TIM1->CCER &= ~(1<<4);
+			  TIM1->CCER |=   1<<6;
+			  TIM1->CCR2  = -1*SineWave.PhaseB;
+		  }
+		  if (SineWave.PhaseC > 0){
+			  TIM1->CCER &= ~(1<<10);
+			  TIM1->CCER |=   1<<8;
+			  TIM1->CCR3  = SineWave.PhaseC;
+		  }
+		  else{
+			  TIM1->CCER &= ~(1<<8);
+			  TIM1->CCER |=   1<<10;
+			  TIM1->CCR3  = -1*SineWave.PhaseC;
+		  }
 	  }
-	  else{
-		  TIM1->CCR1=SineWave.PhaseB;
-		  TIM1->CCR2=SineWave.PhaseA;
-		  TIM1->CCR3=SineWave.PhaseC;
+	  else if (Direction==Reverse){
+		  if (SineWave.PhaseA > 0){
+			  TIM1->CCER &= ~(1<<2);
+			  TIM1->CCER |=   1<<0;
+			  TIM1->CCR2  = SineWave.PhaseA;
+		  }
+		  else{
+			  TIM1->CCER &= ~(1<<0);
+			  TIM1->CCER |=   1<<2;
+			  TIM1->CCR2  = -1*SineWave.PhaseA;
+		  }
+		  if (SineWave.PhaseB > 0){
+			  TIM1->CCER &= ~(1<<6);
+			  TIM1->CCER |=   1<<4;
+			  TIM1->CCR1  = SineWave.PhaseB;
+		  }
+		  else{
+			  TIM1->CCER &= ~(1<<4);
+			  TIM1->CCER |=   1<<6;
+			  TIM1->CCR1  = -1*SineWave.PhaseB;
+		  }
+		  if (SineWave.PhaseC > 0){
+			  TIM1->CCER &= ~(1<<10);
+			  TIM1->CCER |=   1<<8;
+			  TIM1->CCR3  = SineWave.PhaseC;
+		  }
+		  else{
+			  TIM1->CCER &= ~(1<<8);
+			  TIM1->CCER |=   1<<10;
+			  TIM1->CCR3  = -1*SineWave.PhaseC;
+		  }
 	  }
+	  else{ TIM1->CCR1 = TIM1->CCR2 = TIM1->CCR3 = 0; }
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -532,7 +596,7 @@ static void MX_TIM1_Init(void)
   sBreakDeadTimeConfig.OffStateRunMode = TIM_OSSR_DISABLE;
   sBreakDeadTimeConfig.OffStateIDLEMode = TIM_OSSI_DISABLE;
   sBreakDeadTimeConfig.LockLevel = TIM_LOCKLEVEL_OFF;
-  sBreakDeadTimeConfig.DeadTime = 15;
+  sBreakDeadTimeConfig.DeadTime = 150;
   sBreakDeadTimeConfig.BreakState = TIM_BREAK_DISABLE;
   sBreakDeadTimeConfig.BreakPolarity = TIM_BREAKPOLARITY_HIGH;
   sBreakDeadTimeConfig.AutomaticOutput = TIM_AUTOMATICOUTPUT_DISABLE;
