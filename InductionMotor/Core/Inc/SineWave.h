@@ -8,17 +8,20 @@
 #define PWM_MAX_VALUE 1000
 
 #define MAX_FREQUENCY 60
-#define MIN_FREQUENCY 1
+#define MIN_FREQUENCY 20
+
+#define ZERO_THRESHOLD 20
 
 typedef struct {
-	uint32_t PhaseA;
-	uint32_t PhaseA_t;
-	uint32_t PhaseB;
-	uint32_t PhaseB_t;
-	uint32_t PhaseC;
-	uint32_t PhaseC_t;
+	int32_t PhaseA;
+	int32_t PhaseB;
+	int32_t PhaseC;
+	uint32_t Time;
 	uint32_t WaveFrequency;
 	uint32_t VoltageAmplitude;
+	uint32_t FrequencyA;
+	uint32_t FrequencyB;
+	uint32_t FrequencyC;
 }ST_SineWave;
 
 void GenerateSine(ST_SineWave* SineWave, int* HundredMicroSecond);
