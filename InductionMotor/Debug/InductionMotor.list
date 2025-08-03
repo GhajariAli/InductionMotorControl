@@ -3099,7 +3099,7 @@ int main(void)
  8001f12:	4b7b      	ldr	r3, [pc, #492]	@ (8002100 <main+0x838>)
  8001f14:	2201      	movs	r2, #1
  8001f16:	701a      	strb	r2, [r3, #0]
-	  RequestedFrequency=30;
+	  RequestedFrequency=30;//testing fixed frequency
  8001f18:	4b7a      	ldr	r3, [pc, #488]	@ (8002104 <main+0x83c>)
  8001f1a:	221e      	movs	r2, #30
  8001f1c:	601a      	str	r2, [r3, #0]
