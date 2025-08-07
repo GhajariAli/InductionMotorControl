@@ -7,8 +7,8 @@
 
 #define PWM_MAX_VALUE 1000
 
-#define MAX_FREQUENCY 60
-#define MIN_FREQUENCY 10
+#define MAX_FREQUENCY 100
+#define MIN_FREQUENCY 5
 
 typedef struct {
 	int32_t PhaseA;
