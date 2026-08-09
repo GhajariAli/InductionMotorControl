@@ -17,7 +17,6 @@ typedef struct {
 	float AngleA;
 	float AngleB;
 	float AngleC;
-	uint32_t Time;
 	uint32_t WaveFrequency;
 	uint32_t VoltageAmplitude;
 	uint32_t FrequencyA;

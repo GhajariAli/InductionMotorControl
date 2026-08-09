@@ -45,7 +45,21 @@ typedef enum{
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+//Bench bring-up: run open loop at a fixed frequency, ignoring pot / button / PID.
+//Set to 0 for normal operation.
+#define BENCH_FORCE_RUN		0
+#define BENCH_FREQUENCY		20	//Hz
 
+//Bench: force Forward and skip the pot-zero interlock, so the pot ALONE gates the drive.
+//Button is ignored while this is set. Set to 0 for normal operation.
+#define BENCH_SKIP_INTERLOCK	1
+#define BENCH_SKIP_RAMP			1	//bench: jump straight to the requested frequency, no ramp
+#define FREQ_RAMP_MS			50	//ms per 1Hz step when ramping; 50 = 20Hz/s
+
+#define CLOSED_LOOP_SPEED	0		//1 = PID on encoder feedback, 0 = open-loop V/F from pot
+#define POT_DEADBAND		10.0f	//% of travel below which the drive stays off
+#define POT_FILTER_ALPHA	0.2f	//one pole IIR at the 10ms tick, ~50ms time constant
+#define BUTTON_DEBOUNCE_TICKS	3	//consecutive 10ms samples needed to accept a level
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -72,23 +86,26 @@ uint32_t FrequencyChangeTime=0;
 uint32_t ScreenUpdateTime=0;
 int Step=1;
 StateMachine State=Off;
-StateMachine PreviousState=Forward;
+StateMachine PreviousState=Reverse;	//so the first press gives Forward
 encoder_data Encoder;
 int32_t EncoderMeasureTime=0;
-int Enable=0;
-int ToggleState=0;
+volatile int Enable=0;				//EXTI2
+volatile int ToggleState=0;			//EXTI0
 int UpdateState = 0;
 uint32_t  RequestedFrequency = 0;
 StateMachine Direction=0;
 ST_SineWave SineWave;
-int FiftyMicroSecond;
+volatile int FiftyMicroSecond=0;	//TIM10 update ISR
 PID_Controller PID;
-uint16_t ADCRawValues[7];
-uint8_t ADCReady=0;
+volatile uint16_t ADCRawValues[7];	//written by DMA2_Stream0
+volatile uint8_t ADCReady=0;		//ADC conversion complete ISR
 float Potentiameter=0;
+float PotFiltered=0;
 float MCUTemp=0;
 float DriveTemp =0,Current_U =0,Current_V =0,Current_W =0,Current_N =0;
 uint8_t PotZeroed =0;
+volatile int Test=0;				//EXTI0
+volatile uint32_t TestTime=0;		//EXTI0
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -122,9 +139,7 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc){
 }
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
-  if(GPIO_Pin == GPIO_PIN_0){
-	  ToggleState=1;
-  }
+  //PC0 (button) is polled and debounced in the main loop, not handled here.
   if(GPIO_Pin== GPIO_PIN_2){
 	  Enable=0;
   }
@@ -183,16 +198,17 @@ int main(void)
   //  HAL_TIMEx_PWMN_Start(&htim1, TIM_CHANNEL_3);
     TIM1->BDTR|=1<<15;//Enables timer 1 outputs that are set in CCER and CCER register
     TIM1->CR1|=1<<0;//Enables the counting in timer 1
+    TIM1->CCER|=(1<<0)|(1<<2)|(1<<4)|(1<<6)|(1<<8)|(1<<10);//Enable all 6 complementary outputs
     HAL_TIM_Base_Start_IT(&htim10);
     HAL_TIM_Encoder_Start_IT(&htim3, TIM_CHANNEL_ALL);
     HAL_UART_Receive_DMA(&huart2, &receivedSBUS.ReceivedData[0], SBUS_LEN);
-    HAL_ADC_Start_DMA(&hadc1, (uint16_t*) ADCRawValues, 7);
+    HAL_ADC_Start_DMA(&hadc1, (uint32_t*) ADCRawValues, 7);
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
 
-     CDC_Transmit_FS("Induction Driver V2.0\n", strlen("Induction Driver V2.0\n"));
+     CDC_Transmit_FS((uint8_t*)"Induction Driver V2.0\n", strlen("Induction Driver V2.0\n"));
      HAL_GPIO_WritePin(LD1_GPIO_Port, LD1_Pin, 1);
      HAL_Delay(500);
      HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, 1);
@@ -211,7 +227,7 @@ int main(void)
 
      PID.ControlMode=Velocity;
      PID.Kp=5;
-     PID.Ki=0;
+     PID.Ki=0.1;
      PID.Kd=0;
      PID.dt=10;
      PID.integral=0;
@@ -220,7 +236,6 @@ int main(void)
      PID.min_Integral= 5;
      PID.max_Integral= 55;
      PID.output=10;
-     PID.target=100;
 
      HAL_GPIO_WritePin(ShutDown_GPIO_Port, ShutDown_Pin, 0);
 
@@ -236,12 +251,13 @@ int main(void)
 	  		  Potentiameter	= ADCRawValues[5] *100.0/4096.0;
 	  		  MCUTemp		= ADCRawValues[6];
 	  	  }
-	  	  if (Potentiameter<5.0) PotZeroed=1;
+	  	  if (Potentiameter<5.0 && !PotZeroed) PotZeroed=1;
 	  	  (PotZeroed==1)? (HAL_GPIO_WritePin(LD1_GPIO_Port,LD1_Pin,0)): (HAL_GPIO_WritePin(LD1_GPIO_Port, LD1_Pin, 1));
 
 	  	  if (PotZeroed==1 && Potentiameter >=4.0 ){
-	  		  RequestedFrequency= Potentiameter * MAX_FREQUENCY/100.0;
-	  		  if (State==Off) ToggleState=1;
+	  		  //RequestedFrequency= Potentiometer * MAX_FREQUENCY/100.0;
+	  		  PID.target= (Potentiameter * MAX_FREQUENCY/100.0)*1735/60;
+	  		  //if (State==Off) ToggleState=1;
 	  	  }
 
 	  	  //V/F for 208V 60Hz motor under test:
@@ -252,35 +268,61 @@ int main(void)
 	  	  //Calculate RPM
 	  	  //read every 10ms so *100*60 to be per minute
 	  	  //1024*4 pulse / revolution on encoder
-	  	  //Pully ratio 20:50
+	  	  //Pulley ratio 20:50
 	  	  //GetEncoderValue(&Encoder); 	//Obsolete since not using GPIO and using timer to capture encoder value
 	  	  if ((HAL_GetTick()-EncoderMeasureTime)>=10){
 	  		  Encoder.SpeedRPM=(Encoder.EncoderValue-Encoder.PreviousEncoderValue)*((60*100)*20)/(1024*4*50);
 	  		  Encoder.PreviousEncoderValue=Encoder.EncoderValue;
-	  		  //PID Speed Control
-	  		  updatePID(&PID, fabs(Encoder.SpeedRPM));
-	  		  //RequestedFrequency=PID.output;
-	  		  //Report Speed on UART
-	  		  char msg[500];
-	  		  uint32_t RequestedRPM=RequestedFrequency*1735/60;
-	  		  uint32_t Slip= RequestedRPM - fabs(Encoder.SpeedRPM);
-	  		  int len= sprintf(msg,"DT=%.2f, U=%.2f, V=%.2f, W=%.2f, N=%.2f, POT=%.2f, MT=%.2f\n",DriveTemp,Current_U,Current_V,Current_W,Current_N,Potentiameter ,MCUTemp);
-	  		  //int len= sprintf(msg,"ReqF=%ld ActF=%ld Amplitude=%ld\n",RequestedFrequency,SineWave.WaveFrequency,SineWave.VoltageAmplitude);
-			  CDC_Transmit_FS(msg, len);
+
+	  		  //Speed setpoint
+	  		  PotFiltered += (Potentiameter - PotFiltered) * POT_FILTER_ALPHA;
+#if CLOSED_LOOP_SPEED
+	  		  updatePID(&PID, (double)abs(Encoder.SpeedRPM));
+	  		  RequestedFrequency=PID.output;
+#else
+	  		  //Open loop V/F: pot travel above the deadband maps to MIN..MAX_FREQUENCY
+	  		  float PotSpan = (PotFiltered - POT_DEADBAND) / (100.0f - POT_DEADBAND);
+	  		  if (PotSpan < 0.0f) PotSpan = 0.0f;
+	  		  else if (PotSpan > 1.0f) PotSpan = 1.0f;
+	  		  RequestedFrequency = MIN_FREQUENCY + (uint32_t)(PotSpan*(MAX_FREQUENCY-MIN_FREQUENCY) + 0.5f);
+#endif
+	  		  //Button: polled debounce. EXTI is unreliable here because R5 sits in series with
+	  		  //SW3, so a press only pulls PC0 to ~2.6V through the internal pulldown.
+	  		  static uint8_t BtnLast=0, BtnStable=0, BtnCount=0;
+	  		  uint8_t BtnRaw = HAL_GPIO_ReadPin(PB1_INT_GPIO_Port, PB1_INT_Pin);
+	  		  if (BtnRaw != BtnLast){ BtnLast=BtnRaw; BtnCount=0; }
+	  		  else if (BtnCount < BUTTON_DEBOUNCE_TICKS) BtnCount++;
+	  		  if (BtnCount >= BUTTON_DEBOUNCE_TICKS && BtnStable != BtnLast){
+	  			  BtnStable = BtnLast;
+	  			  if (BtnStable){ ToggleState=1; Test=1; TestTime=HAL_GetTick(); }	//press
+	  		  }
+
+	  		  //Report on USB CDC
+	  		  static char msg[128];	//static: USB stack keeps the pointer after this scope exits
+	  		  int len= snprintf(msg,sizeof(msg),"Pot=%5.1f ReqF=%3lu WaveF=%3lu Amp=%4lu RPM=%6ld St=%d\n",
+	  				  PotFiltered, RequestedFrequency, SineWave.WaveFrequency, SineWave.VoltageAmplitude, Encoder.SpeedRPM, State);
+	  		  if (len > (int)sizeof(msg)-1) len = sizeof(msg)-1;	//snprintf returns untruncated length
+			  CDC_Transmit_FS((uint8_t*)msg, len);
 
 	  		  EncoderMeasureTime= HAL_GetTick();
 	  	  }
-	  	  //enable/disable by push button
+	  	  //enable/disable by push button: Off -> Forward -> Off -> Reverse -> Off ...
 	  	  if (ToggleState){
 	  		  if (State==Forward || State==Reverse) State=Off;
 	  		  else if (State==Off && PreviousState==Reverse) State=PreviousState=Forward;
 	  		  else if (State==Off && PreviousState==Forward) State=PreviousState=Reverse;
 	  		  ToggleState=0;
 	  	  }
+	  	  if (HAL_GetTick()-TestTime>=100 && Test) Test=0;
+#if BENCH_SKIP_INTERLOCK
+	  	  PotZeroed = 1;
+	  	  State = Forward;
+#endif
 	  	  //State Machine
 	  	  switch(State){
 	  	  	  case	Off:
 	  	  		  Enable=0;
+	  	  		  Direction=Off;
 	  	  		  HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, 0);
 	  	  		  HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, 0);
 	  	  		  break;
@@ -298,91 +340,45 @@ int main(void)
 	  	  		  break;
 	  	  }
 	  	  //Run motor if enabled
-	  	  //Direction=Forward;//testing forward for now-***********************************************TEST**********************
-
-	  	  if(Enable && State!= Off && PotZeroed && Potentiameter >10.0 && RequestedFrequency>=MIN_FREQUENCY){
+	  	  int RunDrive = (Enable && State!= Off && PotZeroed && PotFiltered > POT_DEADBAND && RequestedFrequency>=MIN_FREQUENCY);
+#if BENCH_FORCE_RUN
+	  	  RunDrive				= 1;
+	  	  Direction				= Forward;
+	  	  RequestedFrequency	= BENCH_FREQUENCY;	//equal to WaveFrequency so the ramp stays a no-op
+	  	  SineWave.WaveFrequency= BENCH_FREQUENCY;
+#endif
+	  	  if(RunDrive){
 	  		  //Generating Sinusoidal PWM
 	  		  GenerateSine(&SineWave, &FiftyMicroSecond);
 	  		  //Ramp Frequency
-	  		  if ((HAL_GetTick()-FrequencyChangeTime)>=50 && RequestedFrequency != SineWave.WaveFrequency){
+#if BENCH_SKIP_RAMP
+	  		  SineWave.WaveFrequency = RequestedFrequency;
+#else
+	  		  if ((HAL_GetTick()-FrequencyChangeTime)>=FREQ_RAMP_MS && RequestedFrequency != SineWave.WaveFrequency){
 	  			  if (RequestedFrequency > SineWave.WaveFrequency) SineWave.WaveFrequency++;
 	  			  else if (RequestedFrequency < SineWave.WaveFrequency) SineWave.WaveFrequency--;
 	  			  FrequencyChangeTime= HAL_GetTick();
 	  		  }
+#endif
 	  	  }
 	  	  //if not enabled then stop everything
 	  	  else {
 	  		  SineWave.PhaseA	=SineWave.PhaseB	=SineWave.PhaseC	=0;
-	  		  TIM1->CCR1=TIM1->CCR2=TIM1->CCR3=0;
-	  		  SineWave.Time	=0;
+	  		  TIM1->CCR1=TIM1->CCR2=TIM1->CCR3=PWM_MAX_VALUE/2;  // neutral, no net current
 	  		  SineWave.WaveFrequency=MIN_FREQUENCY;
 	  	  }
-	  	  //send PWM values out
+	  	  //send PWM values out (centered complementary SPWM)
 	  	  if(Direction==Forward){
-	  		  if (SineWave.PhaseA > 0){
-	  			  TIM1->CCER &= ~(1<<2);
-	  			  TIM1->CCER |=   1<<0;
-	  			  TIM1->CCR1  = SineWave.PhaseA;
-	  		  }
-	  		  else{
-	  			  TIM1->CCER &= ~(1<<0);
-	  			  TIM1->CCER |=   1<<2;
-	  			  TIM1->CCR1  = -1*SineWave.PhaseA;
-	  		  }
-	  		  if (SineWave.PhaseB > 0){
-	  			  TIM1->CCER &= ~(1<<6);
-	  			  TIM1->CCER |=   1<<4;
-	  			  TIM1->CCR2  = SineWave.PhaseB;
-	  		  }
-	  		  else{
-	  			  TIM1->CCER &= ~(1<<4);
-	  			  TIM1->CCER |=   1<<6;
-	  			  TIM1->CCR2  = -1*SineWave.PhaseB;
-	  		  }
-	  		  if (SineWave.PhaseC > 0){
-	  			  TIM1->CCER &= ~(1<<10);
-	  			  TIM1->CCER |=   1<<8;
-	  			  TIM1->CCR3  = SineWave.PhaseC;
-	  		  }
-	  		  else{
-	  			  TIM1->CCER &= ~(1<<8);
-	  			  TIM1->CCER |=   1<<10;
-	  			  TIM1->CCR3  = -1*SineWave.PhaseC;
-	  		  }
+	  		  TIM1->CCR1 = (PWM_MAX_VALUE + SineWave.PhaseA) / 2;
+	  		  TIM1->CCR2 = (PWM_MAX_VALUE + SineWave.PhaseB) / 2;
+	  		  TIM1->CCR3 = (PWM_MAX_VALUE + SineWave.PhaseC) / 2;
 	  	  }
 	  	  else if (Direction==Reverse){
-	  		  if (SineWave.PhaseA > 0){
-	  			  TIM1->CCER &= ~(1<<6);
-	  			  TIM1->CCER |=   1<<4;
-	  			  TIM1->CCR2  = SineWave.PhaseA;
-	  		  }
-	  		  else{
-	  			  TIM1->CCER &= ~(1<<4);
-	  			  TIM1->CCER |=   1<<6;
-	  			  TIM1->CCR2  = -1*SineWave.PhaseA;
-	  		  }
-	  		  if (SineWave.PhaseB > 0){
-	  			  TIM1->CCER &= ~(1<<2);
-	  			  TIM1->CCER |=   1<<0;
-	  			  TIM1->CCR1  = SineWave.PhaseB;
-	  		  }
-	  		  else{
-	  			  TIM1->CCER &= ~(1<<0);
-	  			  TIM1->CCER |=   1<<2;
-	  			  TIM1->CCR1  = -1*SineWave.PhaseB;
-	  		  }
-	  		  if (SineWave.PhaseC > 0){
-	  			  TIM1->CCER &= ~(1<<10);
-	  			  TIM1->CCER |=   1<<8;
-	  			  TIM1->CCR3  = SineWave.PhaseC;
-	  		  }
-	  		  else{
-	  			  TIM1->CCER &= ~(1<<8);
-	  			  TIM1->CCER |=   1<<10;
-	  			  TIM1->CCR3  = -1*SineWave.PhaseC;
-	  		  }
+	  		  TIM1->CCR1 = (PWM_MAX_VALUE + SineWave.PhaseB) / 2;  // swap A<->B to reverse rotation
+	  		  TIM1->CCR2 = (PWM_MAX_VALUE + SineWave.PhaseA) / 2;
+	  		  TIM1->CCR3 = (PWM_MAX_VALUE + SineWave.PhaseC) / 2;
 	  	  }
-	  	  else{ TIM1->CCR1 = TIM1->CCR2 = TIM1->CCR3 = 0; }
+	  	  else{ TIM1->CCR1 = TIM1->CCR2 = TIM1->CCR3 = PWM_MAX_VALUE / 2; }  // neutral, no net current
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -782,10 +778,10 @@ static void MX_DMA_Init(void)
 
   /* DMA interrupt init */
   /* DMA2_Stream0_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA2_Stream0_IRQn, 0, 0);
+  HAL_NVIC_SetPriority(DMA2_Stream0_IRQn, 3, 0);
   HAL_NVIC_EnableIRQ(DMA2_Stream0_IRQn);
   /* DMA2_Stream2_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA2_Stream2_IRQn, 0, 0);
+  HAL_NVIC_SetPriority(DMA2_Stream2_IRQn, 3, 0);
   HAL_NVIC_EnableIRQ(DMA2_Stream2_IRQn);
 
 }
@@ -826,9 +822,16 @@ static void MX_GPIO_Init(void)
 
   /*Configure GPIO pin : DriveFault_INT_Pin */
   GPIO_InitStruct.Pin = DriveFault_INT_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(DriveFault_INT_GPIO_Port, &GPIO_InitStruct);
+
+  /* EXTI interrupt init*/
+  HAL_NVIC_SetPriority(EXTI0_IRQn, 2, 0);
+  HAL_NVIC_EnableIRQ(EXTI0_IRQn);
+
+  HAL_NVIC_SetPriority(EXTI2_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI2_IRQn);
 
   /* USER CODE BEGIN MX_GPIO_Init_2 */
 

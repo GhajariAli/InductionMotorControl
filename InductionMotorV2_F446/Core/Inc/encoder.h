@@ -8,7 +8,7 @@ typedef struct{
 	int InputGrayCode;
 	int PreviusGrayDecode;
 	enum E_direction direction;
-	int32_t EncoderValue ;
+	volatile int32_t EncoderValue ;	//written by TIM3 capture ISR
 	int32_t PreviousEncoderValue;
 	int32_t SpeedRPM;
 }encoder_data;

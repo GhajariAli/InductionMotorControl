@@ -30,16 +30,16 @@ void updatePID(PID_Controller* pid, double current) {
 		P = pid->Kp * error;
 		// Integral
 		pid->integral += pid->Ki * error * (pid->dt/1000);
+		// Integral anti-windup (clamp before computing output)
+		if (pid->integral > pid->max_Integral) {
+			pid->integral = pid->max_Integral;
+		} else if (pid->integral < pid->min_Integral) {
+			pid->integral = pid->min_Integral;
+		}
 		// Derivative
 		D = pid->Kd * (error - pid->prev_error) / (pid->dt/1000);
 		// Total
 		pid->output = P + pid->integral + D;
-		// Integral with anti-windup
-		if (pid->integral > pid->max_output) {
-			pid->integral = pid->max_output;
-		} else if (pid->integral < pid->min_output) {
-			pid->integral = pid->min_output;
-		}
 	}
 	else {
 		P = pid->Kp * error;

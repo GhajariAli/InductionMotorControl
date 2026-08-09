@@ -10,7 +10,7 @@ void GenerateSine(ST_SineWave* SineWave, int* MicroSecond50) {
         return;
 
     // --- Update angles ---
-    float delta = TWO_PI * SineWave->WaveFrequency / 40000.0f;  // 20 kHz update rate would be 20000 per half cycle and 40000 for full period
+    float delta = TWO_PI * SineWave->WaveFrequency / 20000.0f;  // 20 kHz (50 us) update rate: delta = 2*pi*F / 20000
 
     SineWave->AngleA += delta;
     SineWave->AngleB += delta;
@@ -29,12 +29,11 @@ void GenerateSine(ST_SineWave* SineWave, int* MicroSecond50) {
     SineWave->PhaseC = SineWave->VoltageAmplitude * arm_sin_f32(SineWave->AngleC + PHASE_240);
 
     // --- Check conditions for frequency update ---
-    int phaseA_zero_cross = (prevA < 0.0f && SineWave->PhaseA >= 0.0f);  // Rising zero-crossing
-    int phaseB_near_120   = fabsf(SineWave->AngleB - PHASE_120) < ANGLE_THRESHOLD;
-    int phaseC_near_240   = fabsf(SineWave->AngleC - PHASE_240) < ANGLE_THRESHOLD;
+    // AngleA/B/C all track identically (offsets applied at sin-calc time),
+    // so only the PhaseA rising zero-cross is needed to confirm a clean cycle boundary.
+    int phaseA_zero_cross = (prevA < 0.0f && SineWave->PhaseA >= 0.0f);
 
-    if (SineWave->FrequencyA != SineWave->WaveFrequency &&
-        phaseA_zero_cross && phaseB_near_120 && phaseC_near_240)
+    if (SineWave->FrequencyA != SineWave->WaveFrequency && phaseA_zero_cross)
     {
         SineWave->FrequencyA = SineWave->WaveFrequency;
         SineWave->FrequencyB = SineWave->WaveFrequency;
